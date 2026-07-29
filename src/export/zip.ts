@@ -6,11 +6,8 @@ export function sanitizeFilename(name: string): string {
   return (
     name
       // eslint-disable-next-line no-control-regex
-      .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
+      .replace(/[\\/:*?"<>|.\x00-\x1f]/g, '_')
       .replace(/\s+/g, ' ')
-      .trim()
-      // 去掉首尾的点：结尾点会让 `${name}.zip` 出现 `..` 被 Chrome 判为路径遍历，开头点会生成隐藏文件，二者均被 chrome.downloads 拒绝
-      .replace(/^\.+|\.+$/g, '')
       .trim()
       .slice(0, 120) || '未命名文档'
   );
