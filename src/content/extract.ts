@@ -34,7 +34,8 @@ function extractInline(node: Node, ctx: Partial<InlineText> = {}): InlineNode[] 
 
   node.childNodes.forEach((child) => {
     if (child.nodeType === Node.TEXT_NODE) {
-      pushText(child.textContent ?? '', ctx);
+      // 飞书 DOM 大量插入零宽空格（U+200B）做排版，需先剔除
+      pushText((child.textContent ?? '').replace(/​/g, ''), ctx);
       return;
     }
     if (child.nodeType !== Node.ELEMENT_NODE) return;
@@ -214,6 +215,12 @@ function elementToBlock(el: HTMLElement): BlockNode[] {
     return [];
   }
 
+  // 通用容器：若内部包裹了语义块（如带 data-block-id 的 div 里嵌 table/列表/代码块），
+  // 下钻到真正的块，避免被当作段落整体 extractInline 展平（表格会因此丢失结构）。
+  if (el.querySelector(BLOCK_TAG_SELECTOR)) {
+    return extractChildBlocks(el);
+  }
+
   // 段落 / 通用块：提取行内内容。若含独立图片则拆成图片块。
   const inline = extractInline(el);
   return inlineToBlocks(inline);
@@ -258,6 +265,9 @@ function extractChildBlocks(root: HTMLElement): BlockNode[] {
 // 飞书正文由一系列 block 容器组成。优先识别语义标签，
 // 否则把每个直接子容器当作一个段落级块处理。
 const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'blockquote', 'pre', 'table', 'hr', 'img']);
+
+// 用于探测通用容器内是否嵌有语义块（排除 img：含行内图片的段落仍按段落处理）。
+const BLOCK_TAG_SELECTOR = 'h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr';
 
 /** 飞书顶层 block 的 id 属性候选 */
 const BLOCK_ID_ATTRS = ['data-block-id', 'data-record-id', 'data-page-id'];
