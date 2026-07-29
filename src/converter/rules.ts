@@ -2,7 +2,7 @@ import type { InlineNode, InlineText } from '../shared/types';
 
 /** 转义 Markdown 特殊字符（用于普通文本，不用于代码） */
 function escapeText(text: string): string {
-  return text.replace(/([\\`*\[\]])/g, '\\$1');
+  return text.replace(/([\\`])/g, '\\$1');
 }
 
 /** 行内图片：优先本地相对路径，降级为原始 URL */
