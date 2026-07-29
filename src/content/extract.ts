@@ -204,6 +204,17 @@ function elementToBlock(el: HTMLElement): BlockNode[] {
 
   if (tag === 'table') return [extractTable(el)];
 
+  // 飞书表格块：表头行（sticky-row-wrapper）与正文行被拆进两个 <table>，
+  // 若走下方通用下钻会被识别成两张表、并重复表头。这里整体收敛为一张逻辑表：
+  // querySelectorAll('tr') 按文档顺序先取 sticky 表头行、再取正文行，恰好还原完整表格。
+  if (
+    tag !== 'table' &&
+    el.matches('.docx-table-block, [data-block-type="table"]') &&
+    el.querySelector('table')
+  ) {
+    return [extractTable(el)];
+  }
+
   if (tag === 'hr' || el.classList.contains('divider')) {
     return [{ type: 'divider' }];
   }
@@ -318,7 +329,11 @@ export class BlockCollector {
       if (!blocks.length) continue;
 
       const key = this.keyFor(el, blocks);
-      if (this.map.has(key)) continue; // 已采集，跳过
+      const existing = this.map.get(key);
+      // 已采集过：仅当新版本内容更完整时才替换。
+      // 飞书虚拟滚动会先渲染表格/块骨架、后填文字，首次扫到可能残缺，
+      // 需允许更完整的版本覆盖，否则内容丢失（表现为空表格/空段落）。
+      if (existing && contentWeight(blocks) <= contentWeight(existing.blocks)) continue;
 
       // 就地抓取该 block 内的图片（此刻图片仍存活于 DOM，blob 未被 revoke）
       await this.captureImagesIn(blocks);
@@ -456,6 +471,48 @@ function collectImageRefsInBlocks(
 
   blocks.forEach(visit);
   return refs;
+}
+
+/** 块内容量：文本总字符数 + 图片计数。用于判断同一 block 的新版本是否更完整。 */
+function contentWeight(blocks: BlockNode[]): number {
+  let weight = 0;
+  const inlineWeight = (nodes: InlineNode[]) => {
+    for (const n of nodes) {
+      if ('type' in n) weight += 1; // 图片
+      else weight += n.text.length;
+    }
+  };
+  const visitList = (list: ListBlock) => {
+    for (const item of list.items) {
+      inlineWeight(item.children);
+      if (item.sublist) visitList(item.sublist);
+    }
+  };
+  const visit = (b: BlockNode) => {
+    switch (b.type) {
+      case 'heading':
+      case 'paragraph':
+        inlineWeight(b.children);
+        break;
+      case 'quote':
+        b.children.forEach(visit);
+        break;
+      case 'list':
+        visitList(b);
+        break;
+      case 'table':
+        b.rows.forEach((row) => row.forEach(inlineWeight));
+        break;
+      case 'code':
+        weight += b.code.length;
+        break;
+      case 'image':
+        weight += 1;
+        break;
+    }
+  };
+  blocks.forEach(visit);
+  return weight;
 }
 
 /** 去除相邻完全重复的块 */
