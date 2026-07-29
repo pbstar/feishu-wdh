@@ -41,7 +41,7 @@ async function runExport(): Promise<void> {
     const tab = await getActiveFeishuTab();
 
     // 向 content script 请求提取（含滚动预加载、抽取、抓图）
-    let extractResult: ExtractResultMsg & { error?: string };
+    let extractResult: ExtractResultMsg;
     try {
       extractResult = await chrome.tabs.sendMessage(tab.id!, { type: 'EXTRACT' });
     } catch {
@@ -49,7 +49,7 @@ async function runExport(): Promise<void> {
     }
     if (extractResult.error) throw new Error(extractResult.error);
 
-    const { doc, images } = extractResult;
+    const { doc, images = [] } = extractResult;
     if (!doc || !doc.blocks.length) {
       throw new Error('未能提取到文档内容，请确认已打开飞书文档');
     }

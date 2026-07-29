@@ -131,7 +131,6 @@ export type ExportStage =
   | 'idle'
   | 'scrolling'
   | 'extracting'
-  | 'fetchingImages'
   | 'summarizing'
   | 'packaging'
   | 'done'
@@ -140,10 +139,6 @@ export type ExportStage =
 export interface ExportProgress {
   stage: ExportStage;
   message?: string;
-  /** 图片抓取进度 */
-  imagesTotal?: number;
-  imagesDone?: number;
-  imagesFailed?: number;
 }
 
 /** popup → background：请求导出当前 tab */
@@ -156,11 +151,12 @@ export interface ExtractMsg {
   type: 'EXTRACT';
 }
 
-/** content → background：提取结果 */
+/** content → background：提取结果（失败时带 error，不含 doc/images） */
 export interface ExtractResultMsg {
   type: 'EXTRACT_RESULT';
-  doc: DocumentModel;
-  images: FetchedImage[];
+  doc?: DocumentModel;
+  images?: FetchedImage[];
+  error?: string;
 }
 
 /** content/background → popup：进度上报 */

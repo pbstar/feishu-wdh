@@ -26,9 +26,8 @@ const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
 
 const STAGE_PROGRESS: Record<ExportStage, number> = {
   idle: 0,
-  scrolling: 15,
-  extracting: 35,
-  fetchingImages: 55,
+  scrolling: 30,
+  extracting: 55,
   summarizing: 75,
   packaging: 90,
   done: 100,
@@ -56,13 +55,9 @@ function setStatus(text: string, kind: 'normal' | 'error' | 'success' = 'normal'
   statusText.className = 'status-text' + (kind === 'error' ? ' error' : kind === 'success' ? ' success' : '');
 }
 
-function setProgress(stage: ExportStage, imagesDone?: number, imagesTotal?: number): void {
+function setProgress(stage: ExportStage): void {
   progressTrack.hidden = false;
-  let pct = STAGE_PROGRESS[stage];
-  if (stage === 'fetchingImages' && imagesTotal && imagesTotal > 0) {
-    pct = 35 + Math.round((imagesDone! / imagesTotal) * 35);
-  }
-  progressBar.style.width = `${pct}%`;
+  progressBar.style.width = `${STAGE_PROGRESS[stage]}%`;
 }
 
 function finish(running_: boolean): void {
@@ -82,7 +77,7 @@ exportBtn.addEventListener('click', () => {
 
 chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
   if (msg.type === 'PROGRESS') {
-    const { stage, message, imagesDone, imagesTotal } = msg.progress;
+    const { stage, message } = msg.progress;
     if (stage === 'error') {
       setStatus(message || '导出失败', 'error');
       progressTrack.hidden = true;
@@ -90,7 +85,7 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
       return;
     }
     setStatus(message || '', 'normal');
-    setProgress(stage, imagesDone, imagesTotal);
+    setProgress(stage);
   } else if (msg.type === 'EXPORT_DONE') {
     finish(false);
     if (msg.ok) {

@@ -28,14 +28,6 @@ export const TITLE_SELECTORS = [
   'h1.title',
 ];
 
-/** 单个内容块候选（飞书每个 block 的包裹元素） */
-export const BLOCK_SELECTORS = [
-  '.docx-block',
-  '.block',
-  '[data-block-id]',
-  '[data-record-id]',
-];
-
 /**
  * 在候选选择器中找到第一个存在的元素。
  */

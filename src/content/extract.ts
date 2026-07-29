@@ -21,6 +21,9 @@ function extractTitle(): string {
 }
 
 // ── 行内内容提取 ──
+// 语义已明确的行内标签，无需再查计算样式即可判定；其余元素才回退到 getComputedStyle。
+const SEMANTIC_INLINE_TAGS = new Set(['b', 'strong', 'i', 'em', 'del', 's', 'strike', 'code']);
+
 function extractInline(node: Node, ctx: Partial<InlineText> = {}): InlineNode[] {
   const out: InlineNode[] = [];
 
@@ -53,14 +56,20 @@ function extractInline(node: Node, ctx: Partial<InlineText> = {}): InlineNode[] 
       return;
     }
 
-    // 样式标签
-    const style = getComputedStyle(el);
+    // 样式标签：语义标签直接判定；否则查一次计算样式，识别飞书用 CSS 携带的样式。
     const nextCtx: Partial<InlineText> = { ...ctx };
-    if (tag === 'b' || tag === 'strong' || Number(style.fontWeight) >= 600) nextCtx.bold = true;
-    if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic') nextCtx.italic = true;
+    if (tag === 'b' || tag === 'strong') nextCtx.bold = true;
+    if (tag === 'i' || tag === 'em') nextCtx.italic = true;
     if (tag === 'del' || tag === 's' || tag === 'strike') nextCtx.strike = true;
     if (tag === 'code') nextCtx.code = true;
-    if (style.textDecorationLine?.includes('line-through')) nextCtx.strike = true;
+
+    const semantic = SEMANTIC_INLINE_TAGS.has(tag);
+    if (!semantic) {
+      const style = getComputedStyle(el);
+      if (Number(style.fontWeight) >= 600) nextCtx.bold = true;
+      if (style.fontStyle === 'italic') nextCtx.italic = true;
+      if (style.textDecorationLine?.includes('line-through')) nextCtx.strike = true;
+    }
 
     out.push(...extractInline(el, nextCtx));
   });
@@ -97,6 +106,16 @@ function mergeInline(nodes: InlineNode[]): InlineNode[] {
 
 function textContentTrim(el: Element): string {
   return (el.textContent ?? '').replace(/​/g, '').trim();
+}
+
+/** FNV-1a 32 位字符串哈希，用于块去重指纹（同长度+同哈希视为同内容） */
+function hashString(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
 }
 
 // ── 列表提取 ──
@@ -339,12 +358,14 @@ export class BlockCollector {
     return result;
   }
 
-  /** block 唯一键：优先 data-block-id，否则用文本指纹 */
+  /** block 唯一键：优先 data-block-id，否则用完整内容哈希 */
   private keyFor(el: HTMLElement, blocks: BlockNode[]): string {
     const id = getBlockId(el);
     if (id) return `id:${id}`;
-    // 无 id：用块结构 + 文本指纹做键（同内容视为同块，避免重复）
-    return 'fp:' + JSON.stringify(blocks).slice(0, 500);
+    // 无 id：对整块序列化内容做哈希（含长度），同内容视为同块。
+    // 用完整内容而非截断前缀，避免长块前缀相同被误判重复。
+    const json = JSON.stringify(blocks);
+    return `fp:${json.length}:${hashString(json)}`;
   }
 
   /** block 在文档中的绝对垂直位置，用于跨屏排序 */
