@@ -5,8 +5,7 @@ import type { FetchedImage } from '../shared/types';
 export function sanitizeFilename(name: string): string {
   return (
     name
-      // eslint-disable-next-line no-control-regex
-      .replace(/[\\/:*?"<>|.\x00-\x1f]/g, '_')
+      .replace(/[\\/:*?"<>|]/g, '_')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 120) || '未命名文档'
