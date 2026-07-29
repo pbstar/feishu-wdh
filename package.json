@@ -1,7 +1,7 @@
 {
   "name": "feishu-wdh",
   "version": "0.0.1",
-  "description": "一键将飞书/Lark 文档导出为 Markdown，图片本地化并打包 ZIP，可选 AI 总结精简",
+  "description": "一键将飞书文档导出为 Markdown，图片本地化并打包 ZIP，可选 AI 总结精简",
   "type": "module",
   "private": true,
   "scripts": {

@@ -1,6 +1,6 @@
 # 飞书文档导出助手（feishu-wdh）
 
-一键将当前 **飞书 / Lark 文档** 转换为 **Markdown**，图片一并下载并打包为 ZIP。可选接入大模型，在导出前对内容进行 **AI 总结精简**。
+一键将当前 **飞书文档** 转换为 **Markdown**，图片一并下载并打包为 ZIP。可选接入大模型，在导出前对内容进行 **AI 总结精简**。
 
 > 所有处理均在浏览器本地完成，扩展不设自有服务器、不收集任何数据。
 
@@ -26,7 +26,7 @@
 
 ## 使用方法
 
-1. 打开一个飞书 / Lark 文档页面。
+1. 打开一个飞书文档页面。
 2. 点击浏览器工具栏中的扩展图标，在弹窗中点击 **「导出 Markdown」**。
 3. 等待处理完成，浏览器将自动下载 ZIP 文件。
 4. 解压后即可获得 `文档标题.md` 及配套的 `images/` 目录。
@@ -44,9 +44,9 @@
 
 | 配置项 | 说明 | 示例 |
 | --- | --- | --- |
-| **API 地址** | 兼容 OpenAI Chat Completions 格式的接口地址 | `https://api.openai.com/v1/chat/completions` |
+| **API 地址** | 兼容 OpenAI Chat Completions 格式的接口地址 | `https://api.deepseek.com/chat/completions` |
 | **API 密钥** | 访问模型服务的鉴权密钥 | `sk-xxxxxxxx` |
-| **模型名称** | 使用的模型标识 | `gpt-4o-mini`、`deepseek-chat` 等 |
+| **模型名称** | 使用的模型标识 | `deepseek-v4-flash` 等 |
 
 > 兼容所有 **OpenAI Chat Completions** 风格的服务，如 OpenAI、DeepSeek、通义千问、Moonshot 等。
 
@@ -73,7 +73,7 @@
 确保已安装 Node.js，然后执行：
 
 ```bash
-git clone <仓库地址>
+git clone https://github.com/pbstar/feishu-wdh.git
 cd feishu-wdh
 npm install
 npm run build
@@ -118,17 +118,6 @@ feishu-wdh/
 - 本扩展不包含自有服务器，**不会收集、留存任何用户数据**，亦不出售用户信息。
 - 默认情况下，文档内容仅在本地浏览器中处理。
 - **唯一例外**：当你主动开启「AI 总结精简」后，文档内容会发送给你自行配置的第三方大模型服务，该部分数据的处理受该服务商的隐私政策约束。
-
-## 路线图
-
-- [x] 解析飞书文档 DOM 结构
-- [x] HTML → Markdown 转换器
-- [x] 图片下载与本地化
-- [x] ZIP 打包与下载
-- [x] 扩展弹窗 UI
-- [x] 表格、代码块等复杂格式适配
-- [x] 设置页面：AI 开关与模型 API 三要素配置
-- [x] AI 总结精简：调用大模型处理导出内容
 
 ## 许可证
 

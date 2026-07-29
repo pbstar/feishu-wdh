@@ -31,7 +31,7 @@ async function getActiveFeishuTab(): Promise<chrome.tabs.Tab> {
   if (!tab?.id || !tab.url) throw new Error('未找到当前标签页');
   const host = new URL(tab.url).hostname;
   if (!FEISHU_HOST.test(host)) {
-    throw new Error('请在飞书 / Lark 文档页面使用本扩展');
+    throw new Error('请在飞书文档页面使用本扩展');
   }
   return tab;
 }
