@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>飞书文档导出助手</title>
+    <link rel="stylesheet" href="../styles/base.css" />
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <div class="popup">
+      <!-- 主视图：导出 -->
+      <section id="view-main" class="view">
+        <header class="popup-header">
+          <h1 class="popup-title">飞书文档导出助手</h1>
+          <button id="settings-btn" class="icon-btn" title="AI 设置">⚙</button>
+        </header>
+
+        <p class="popup-desc">将当前飞书 / Lark 文档导出为 Markdown，图片打包为 ZIP。</p>
+
+        <button id="export-btn" class="btn-primary export-btn">导出 Markdown</button>
+
+        <div id="status" class="status" hidden>
+          <div class="status-row">
+            <span id="spinner" class="spinner" hidden></span>
+            <span id="status-text" class="status-text"></span>
+          </div>
+          <div class="progress-track" id="progress-track" hidden>
+            <div class="progress-bar" id="progress-bar"></div>
+          </div>
+        </div>
+
+        <footer class="popup-footer">
+          <span id="ai-hint" class="ai-hint"></span>
+        </footer>
+      </section>
+
+      <!-- 设置视图：AI 配置 -->
+      <section id="view-settings" class="view" hidden>
+        <header class="popup-header">
+          <button id="back-btn" class="icon-btn" title="返回">←</button>
+          <h1 class="popup-title">AI 总结精简设置</h1>
+          <span class="icon-btn-placeholder"></span>
+        </header>
+
+        <div class="switch-row">
+          <div>
+            <div class="switch-label">启用 AI 总结精简</div>
+            <div class="switch-desc">导出前调用大模型总结、精简正文，默认关闭。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="ai-enabled" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div id="ai-fields" class="ai-fields">
+          <div class="field">
+            <label class="field-label" for="api-url">API 地址</label>
+            <input type="text" id="api-url" placeholder="https://api.openai.com/v1/chat/completions" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="api-key">API 密钥</label>
+            <input type="password" id="api-key" placeholder="sk-xxxxxxxx" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="model">模型名称</label>
+            <input type="text" id="model" placeholder="gpt-4o-mini、deepseek-chat 等" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="granularity">总结粒度</label>
+            <select id="granularity">
+              <option value="summary">精简摘要 — 提炼为简短要点</option>
+              <option value="perParagraph">逐段精简 — 保留结构，逐段去冗余</option>
+              <option value="dedupeOnly">仅去冗余 — 保留原意，仅删重复</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="save-btn" class="btn-primary">保存设置</button>
+          <span id="save-status" class="save-status"></span>
+        </div>
+
+        <p class="privacy-note">
+          配置仅保存在浏览器本地。开启后文档内容会发送至你填写的大模型服务商，请自行确认其隐私政策。
+        </p>
+      </section>
+    </div>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

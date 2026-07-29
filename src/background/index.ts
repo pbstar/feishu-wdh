@@ -1,0 +1,95 @@
+import { loadAiConfig } from '../shared/storage';
+import type {
+  ExportDoneMsg,
+  ExtractResultMsg,
+  ProgressMsg,
+  RuntimeMessage,
+} from '../shared/types';
+import { toMarkdown } from '../converter';
+import { summarizeMarkdown } from '../ai/summarize';
+import { packageZip } from '../export/zip';
+import { downloadZip } from '../export/download';
+
+const FEISHU_HOST = /(feishu\.cn|larksuite\.com)$/i;
+
+function reportProgress(progress: ProgressMsg['progress']): void {
+  const msg: ProgressMsg = { type: 'PROGRESS', progress };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    /* popup 可能已关闭 */
+  });
+}
+
+function reportDone(result: Omit<ExportDoneMsg, 'type'>): void {
+  const msg: ExportDoneMsg = { type: 'EXPORT_DONE', ...result };
+  chrome.runtime.sendMessage(msg).catch(() => {
+    /* popup 可能已关闭 */
+  });
+}
+
+async function getActiveFeishuTab(): Promise<chrome.tabs.Tab> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url) throw new Error('未找到当前标签页');
+  const host = new URL(tab.url).hostname;
+  if (!FEISHU_HOST.test(host)) {
+    throw new Error('请在飞书 / Lark 文档页面使用本扩展');
+  }
+  return tab;
+}
+
+async function runExport(): Promise<void> {
+  try {
+    const tab = await getActiveFeishuTab();
+
+    // 向 content script 请求提取（含滚动预加载、抽取、抓图）
+    let extractResult: ExtractResultMsg & { error?: string };
+    try {
+      extractResult = await chrome.tabs.sendMessage(tab.id!, { type: 'EXTRACT' });
+    } catch {
+      throw new Error('无法连接到页面脚本，请刷新文档页面后重试');
+    }
+    if (extractResult.error) throw new Error(extractResult.error);
+
+    const { doc, images } = extractResult;
+    if (!doc || !doc.blocks.length) {
+      throw new Error('未能提取到文档内容，请确认已打开飞书文档');
+    }
+
+    const imagesFailed = images.filter((i) => i.failed).length;
+
+    // 转 Markdown
+    let markdown = toMarkdown(doc);
+
+    // 可选 AI 总结
+    const aiConfig = await loadAiConfig();
+    if (aiConfig.enabled && aiConfig.apiKey && aiConfig.apiUrl && aiConfig.model) {
+      reportProgress({ stage: 'summarizing', message: '正在调用 AI 处理内容…' });
+      try {
+        markdown = await summarizeMarkdown(markdown, aiConfig);
+      } catch (err) {
+        // AI 失败不阻断导出，降级为原文
+        reportProgress({
+          stage: 'summarizing',
+          message: `AI 处理失败，将导出原文：${(err as Error).message}`,
+        });
+      }
+    }
+
+    // 打包并下载
+    reportProgress({ stage: 'packaging', message: '正在打包 ZIP…' });
+    const zipBase64 = await packageZip(doc.title, markdown, images);
+    const filename = await downloadZip(zipBase64, doc.title);
+
+    reportProgress({ stage: 'done', message: '导出完成' });
+    reportDone({ ok: true, filename, imagesFailed });
+  } catch (err) {
+    const message = (err as Error).message || String(err);
+    reportProgress({ stage: 'error', message });
+    reportDone({ ok: false, error: message });
+  }
+}
+
+chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
+  if (msg.type === 'START_EXPORT') {
+    void runExport();
+  }
+});
