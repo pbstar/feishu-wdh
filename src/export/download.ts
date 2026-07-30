@@ -35,10 +35,13 @@ export async function downloadZip(zipBase64: string, title: string): Promise<str
     throw new Error(resp?.error || '生成下载链接失败');
   }
 
-  await chrome.downloads.download({
-    url: resp.url,
-    filename,
-    saveAs: false,
-  });
-  return filename;
+  try {
+    await chrome.downloads.download({ url: resp.url, filename, saveAs: false });
+    return filename;
+  } catch {
+    // 文件名仍被拒绝时降级为兜底名，保证导出不失败
+    const fallback = '飞书文档导出.zip';
+    await chrome.downloads.download({ url: resp.url, filename: fallback, saveAs: false });
+    return fallback;
+  }
 }

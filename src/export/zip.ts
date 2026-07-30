@@ -5,10 +5,12 @@ import type { FetchedImage } from '../shared/types';
 export function sanitizeFilename(name: string): string {
   return (
     name
+      // 控制字符与不可见格式字符（零宽、BOM、方向控制符等），会导致 Invalid filename
+      .replace(/[\p{Cc}\p{Cf}]/gu, '')
       .replace(/[\\/:*?"<>|]/g, '_')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 120) || '未命名文档'
+      .replace(/\./g, '_')
+      .slice(0, 120)
+      .trim() || '未命名文档'
   );
 }
 
