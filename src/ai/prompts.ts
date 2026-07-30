@@ -1,12 +1,13 @@
-import type { AiGranularity } from '../shared/types';
+import type { AiGranularity } from "../shared/types";
 
 const COMMON_RULES = `你是需求文档专家。处理文档时，必须：
 1. 输出严格符合 GFM 规范的 Markdown。
 2. 保留所有图片、代码块、表格、链接等元素，内容零丢失。
-3. 禁止修改 UI 文案话术之类的短语或句子。
-4. 统一专业术语，核心概念前后一致。
-5. 仅输出正文内容，不添加任何解释或评论。
-6. 保持原文语言。`;
+3. 剔除乱码以及与需求无关的冗余信息。
+4. 禁止修改 UI 文案、提示语、固定话术之类的短语或句子。
+5. 统一专业术语，核心概念前后一致。
+6. 仅输出正文内容，不添加任何解释或评论。
+7. 保持原文语言。`;
 
 const PROMPTS: Record<AiGranularity, string> = {
   summary: `${COMMON_RULES}
