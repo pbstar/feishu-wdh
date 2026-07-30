@@ -25,3 +25,15 @@ const PROMPTS: Record<AiGranularity, string> = {
 export function getPrompt(granularity: AiGranularity): string {
   return PROMPTS[granularity];
 }
+
+// 不同粒度对确定性的需求不同:仅去重要稳定、摘要可放开发挥
+const TEMPERATURES: Record<AiGranularity, number> = {
+  summary: 0.8,
+  perParagraph: 0.5,
+  dedupeOnly: 0.2,
+};
+
+/** 按粒度返回采样温度 */
+export function getTemperature(granularity: AiGranularity): number {
+  return TEMPERATURES[granularity];
+}

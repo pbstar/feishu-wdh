@@ -1,5 +1,8 @@
 import type { AiConfig } from '../shared/types';
-import { getPrompt } from './prompts';
+import { getPrompt, getTemperature } from './prompts';
+
+/** AI 请求超时时间（毫秒）：超长文档处理较慢，留足余量 */
+const REQUEST_TIMEOUT_MS = 60_000;
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -21,19 +24,33 @@ export async function summarizeMarkdown(markdown: string, config: AiConfig): Pro
     { role: 'user', content: markdown },
   ];
 
-  const resp = await fetch(config.apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: 0.3,
-      stream: false,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let resp: Response;
+  try {
+    resp = await fetch(config.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: getTemperature(config.granularity),
+        stream: false,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      throw new Error(`AI 请求超时（超过 ${REQUEST_TIMEOUT_MS / 1000} 秒）`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!resp.ok) {
     let detail = `HTTP ${resp.status}`;
