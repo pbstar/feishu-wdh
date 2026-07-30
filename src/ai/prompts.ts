@@ -1,11 +1,12 @@
 import type { AiGranularity } from '../shared/types';
 
-const COMMON_RULES = `你是一个专业的文档处理助手。请遵守以下规则：
-- 输出必须是合法的 GitHub Flavored Markdown（GFM）。
-- 完整保留所有 Markdown 图片引用（形如 ![...](...)），不得删除、改写或移动其路径。
-- 保留代码块、表格、链接等结构化元素的语法。
-- 不要添加任何解释性前言或结语，直接输出处理后的正文。
-- 使用与原文一致的语言。`;
+const COMMON_RULES = `你是需求文档专家。处理文档时，必须：
+1. 输出严格符合 GFM 规范的 Markdown。
+2. 保留所有图片、代码块、表格、链接等元素，内容零丢失。
+3. 禁止修改 UI 文案话术之类的短语或句子。
+4. 统一专业术语，核心概念前后一致。
+5. 仅输出正文内容，不添加任何解释或评论。
+6. 保持原文语言。`;
 
 const PROMPTS: Record<AiGranularity, string> = {
   summary: `${COMMON_RULES}
