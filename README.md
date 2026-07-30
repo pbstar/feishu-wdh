@@ -68,7 +68,15 @@
 
 ## 安装
 
-### 从源码加载（开发模式）
+### 方式一：下载压缩包安装（推荐）
+
+1. 从项目的 [`versions/`](versions/) 目录下载最新的 `feishu-wdh-vX.X.X.zip`。
+2. 解压到本地任意目录。
+3. 打开 Chrome，访问 `chrome://extensions/`。
+4. 打开右上角「开发者模式」。
+5. 点击「加载已解压的扩展程序」，选择解压后的目录。
+
+### 方式二：从源码构建（开发者模式）
 
 确保已安装 Node.js，然后执行：
 
@@ -79,9 +87,18 @@ npm install
 npm run build
 ```
 
+构建完成后：
+
+- `dist/` 为可加载的扩展产物。
+- `versions/feishu-wdh-vX.X.X.zip` 为按当前版本号自动打包的压缩包。
+
+加载步骤：
+
 1. 打开 Chrome，访问 `chrome://extensions/`。
 2. 打开右上角「开发者模式」。
 3. 点击「加载已解压的扩展程序」，选择项目中的 `dist/` 目录。
+
+> 开发调试可执行 `npm run dev`，或单独执行 `npm run build` 打包为压缩包。
 
 ## 技术栈
 
@@ -108,7 +125,10 @@ feishu-wdh/
 │   └── popup/        # 扩展弹窗 UI（含 AI 配置设置视图）
 ├── public/
 │   └── icons/        # 扩展图标
+├── scripts/
+│   └── pack.mjs      # 构建后将 dist 打包为 versions/*.zip
 ├── src/manifest.config.ts # 扩展清单（TS 形式）
+├── versions/         # 各版本打包产物（.zip）
 └── dist/             # 构建产物
 ```
 
