@@ -280,6 +280,9 @@ const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'blo
 // 用于探测通用容器内是否嵌有语义块（排除 img：含行内图片的段落仍按段落处理）。
 const BLOCK_TAG_SELECTOR = 'h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table, hr';
 
+// 直接子级是否含语义块的选择器（findTopBlocks 下钻判断用）
+const BLOCK_CHILD_SELECTOR = `:scope ${[...BLOCK_TAGS].join(', :scope ')}`;
+
 /** 飞书顶层 block 的 id 属性候选 */
 const BLOCK_ID_ATTRS = ['data-block-id', 'data-record-id', 'data-page-id'];
 
@@ -370,7 +373,7 @@ export class BlockCollector {
       for (const child of Array.from(node.children) as HTMLElement[]) {
         if (isBlockElement(child)) {
           result.push(child);
-        } else if (child.querySelector(':scope ' + [...BLOCK_TAGS].join(', :scope ')) ||
+        } else if (child.querySelector(BLOCK_CHILD_SELECTOR) ||
                    BLOCK_ID_ATTRS.some((a) => child.querySelector(`:scope [${a}]`))) {
           walk(child); // 内部还有 block，继续下钻
         } else {

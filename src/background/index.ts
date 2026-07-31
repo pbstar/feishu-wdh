@@ -1,8 +1,8 @@
 import { loadAiConfig } from '../shared/storage';
+import { reportProgress } from '../shared/messaging';
 import type {
   ExportDoneMsg,
   ExtractResultMsg,
-  ProgressMsg,
   RuntimeMessage,
 } from '../shared/types';
 import { toMarkdown } from '../converter';
@@ -11,13 +11,6 @@ import { packageZip } from '../export/zip';
 import { downloadZip } from '../export/download';
 
 const FEISHU_HOST = /(feishu\.cn|larksuite\.com)$/i;
-
-function reportProgress(progress: ProgressMsg['progress']): void {
-  const msg: ProgressMsg = { type: 'PROGRESS', progress };
-  chrome.runtime.sendMessage(msg).catch(() => {
-    /* popup 可能已关闭 */
-  });
-}
 
 function reportDone(result: Omit<ExportDoneMsg, 'type'>): void {
   const msg: ExportDoneMsg = { type: 'EXPORT_DONE', ...result };
@@ -36,7 +29,15 @@ async function getActiveFeishuTab(): Promise<chrome.tabs.Tab> {
   return tab;
 }
 
+// 导出互斥：导出期间重复触发（如关闭再打开 popup 后再次点击）会被忽略，避免并发采集错乱
+let exporting = false;
+
 async function runExport(): Promise<void> {
+  if (exporting) {
+    reportProgress({ stage: 'error', message: '已有导出进行中，请稍候再试' });
+    return;
+  }
+  exporting = true;
   try {
     const tab = await getActiveFeishuTab();
 
@@ -85,6 +86,8 @@ async function runExport(): Promise<void> {
     const message = (err as Error).message || String(err);
     reportProgress({ stage: 'error', message });
     reportDone({ ok: false, error: message });
+  } finally {
+    exporting = false;
   }
 }
 

@@ -49,7 +49,7 @@ function renderBlock(block: BlockNode): string {
     case 'table': {
       if (!block.rows.length) return '';
       const [header, ...body] = block.rows;
-      const cols = Math.max(...block.rows.map((r) => r.length));
+      const cols = block.rows.reduce((max, r) => Math.max(max, r.length), 0);
       const pad = (row: typeof header) => {
         const cells = row.map(renderTableCell);
         while (cells.length < cols) cells.push('');

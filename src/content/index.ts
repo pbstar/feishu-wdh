@@ -1,14 +1,7 @@
-import { onRuntimeMessage } from '../shared/messaging';
-import type { DocumentModel, ExtractResultMsg, ProgressMsg, RuntimeMessage } from '../shared/types';
+import { onRuntimeMessage, reportProgress } from '../shared/messaging';
+import type { DocumentModel, ExtractResultMsg, RuntimeMessage } from '../shared/types';
 import { findScrollContainer, scrollAndCollect } from './scroll';
 import { BlockCollector, getDocRoot, getDocTitle } from './extract';
-
-function reportProgress(progress: ProgressMsg['progress']): void {
-  const msg: ProgressMsg = { type: 'PROGRESS', progress };
-  chrome.runtime.sendMessage(msg).catch(() => {
-    /* popup 可能已关闭，忽略 */
-  });
-}
 
 async function runExtract(): Promise<ExtractResultMsg> {
   const container = findScrollContainer();

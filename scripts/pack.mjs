@@ -1,4 +1,5 @@
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
@@ -7,7 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = join(root, 'dist');
 const versionsDir = join(root, 'versions');
 
-const pkg = JSON.parse(await import('node:fs/promises').then((fs) => fs.readFile(join(root, 'package.json'), 'utf-8')));
+const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf-8'));
 
 if (!existsSync(distDir)) {
   console.error('[pack] 未找到 dist 目录，请先执行 vite build。');

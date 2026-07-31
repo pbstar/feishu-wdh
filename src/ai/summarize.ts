@@ -1,8 +1,8 @@
 import type { AiConfig } from '../shared/types';
 import { getPrompt, getTemperature } from './prompts';
 
-/** AI 请求超时时间（毫秒）：超长文档处理较慢，留足余量 */
-const REQUEST_TIMEOUT_MS = 60_000;
+/** AI 请求超时时间（毫秒）：超长文档处理较慢，留足余量，且不宜逼近 SW 生命周期上限（约 5 分钟） */
+const REQUEST_TIMEOUT_MS = 120_000;
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -24,12 +24,13 @@ export async function summarizeMarkdown(markdown: string, config: AiConfig): Pro
     { role: 'user', content: markdown },
   ];
 
+  // 超时必须覆盖整个请求（含响应体读取）：服务端常先返回响应头、再边生成边写 body，
+  // 若只保护 await fetch()，resp.json() 可能无限挂起，UI 会一直停在"正在调用 AI 处理内容"。
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  let resp: Response;
   try {
-    resp = await fetch(config.apiUrl, {
+    const resp = await fetch(config.apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -43,6 +44,22 @@ export async function summarizeMarkdown(markdown: string, config: AiConfig): Pro
       }),
       signal: controller.signal,
     });
+
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const errJson = (await resp.json()) as ChatResponse;
+        if (errJson.error?.message) detail = errJson.error.message;
+      } catch {
+        /* 忽略解析失败 */
+      }
+      throw new Error(`AI 请求失败：${detail}`);
+    }
+
+    const data = (await resp.json()) as ChatResponse;
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('AI 返回内容为空');
+    return content.trim();
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
       throw new Error(`AI 请求超时（超过 ${REQUEST_TIMEOUT_MS / 1000} 秒）`);
@@ -51,20 +68,4 @@ export async function summarizeMarkdown(markdown: string, config: AiConfig): Pro
   } finally {
     clearTimeout(timer);
   }
-
-  if (!resp.ok) {
-    let detail = `HTTP ${resp.status}`;
-    try {
-      const errJson = (await resp.json()) as ChatResponse;
-      if (errJson.error?.message) detail = errJson.error.message;
-    } catch {
-      /* 忽略解析失败 */
-    }
-    throw new Error(`AI 请求失败：${detail}`);
-  }
-
-  const data = (await resp.json()) as ChatResponse;
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('AI 返回内容为空');
-  return content.trim();
 }

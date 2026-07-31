@@ -98,7 +98,7 @@ npm run build
 2. 打开右上角「开发者模式」。
 3. 点击「加载已解压的扩展程序」，选择项目中的 `dist/` 目录。
 
-> 开发调试可执行 `npm run dev`，或单独执行 `npm run build` 打包为压缩包。
+> 执行 `npm run build` 即可完成 TypeScript 类型检查、构建，并自动打包为 `versions/` 压缩包。
 
 ## 技术栈
 

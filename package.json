@@ -1,12 +1,11 @@
 {
   "name": "feishu-wdh",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "一键将飞书文档导出为 Markdown，图片本地化并打包 ZIP，可选 AI 总结精简",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/pack.mjs"
+    "build": "tsc && vite build && node scripts/pack.mjs"
   },
   "dependencies": {
     "jszip": "^3.10.1"

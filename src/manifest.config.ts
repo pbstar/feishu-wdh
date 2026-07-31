@@ -31,6 +31,6 @@ export default defineManifest({
       run_at: 'document_idle',
     },
   ],
-  permissions: ['activeTab', 'storage', 'downloads', 'scripting', 'offscreen'],
+  permissions: ['storage', 'downloads', 'offscreen'],
   host_permissions: ['*://*.feishu.cn/*', '*://*.larksuite.com/*'],
 });
