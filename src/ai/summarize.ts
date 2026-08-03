@@ -1,7 +1,9 @@
 import type { AiConfig } from '../shared/types';
 import { getPrompt, getTemperature } from './prompts';
+import { ensureOffscreen, sendToOffscreen } from '../shared/offscreen';
+import type { SummarizeResponse } from '../shared/offscreen';
 
-/** AI 请求超时时间（毫秒）：超长文档处理较慢，留足余量，且不宜逼近 SW 生命周期上限（约 5 分钟） */
+/** AI 请求超时时间（毫秒）：超长文档处理较慢，留足余量 */
 const REQUEST_TIMEOUT_MS = 120_000;
 
 interface ChatMessage {
@@ -16,16 +18,18 @@ interface ChatResponse {
 
 /**
  * 调用兼容 OpenAI Chat Completions 的大模型，对 Markdown 全文按配置粒度处理。
+ * 由 offscreen 文档执行：SW 生命周期受限，裸 fetch 挂起时会被回收，导致 UI 永久卡在
+ * "正在调用 AI 处理内容"；offscreen 是真实页面，定时器可靠触发、无硬上限。
  * 失败时抛出错误，由调用方决定是否降级为原文。
  */
-export async function summarizeMarkdown(markdown: string, config: AiConfig): Promise<string> {
+export async function runSummarizeRequest(markdown: string, config: AiConfig): Promise<string> {
   const messages: ChatMessage[] = [
     { role: 'system', content: getPrompt(config.granularity) },
     { role: 'user', content: markdown },
   ];
 
   // 超时必须覆盖整个请求（含响应体读取）：服务端常先返回响应头、再边生成边写 body，
-  // 若只保护 await fetch()，resp.json() 可能无限挂起，UI 会一直停在"正在调用 AI 处理内容"。
+  // 若只保护 await fetch()，resp.json() 可能无限挂起。
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -68,4 +72,23 @@ export async function summarizeMarkdown(markdown: string, config: AiConfig): Pro
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * 后台入口：把 AI 请求交给 offscreen 文档执行。
+ * await sendMessage 的挂起消息通道会把 SW 保活，offscreen 内请求超时后返回明确错误，
+ * 由调用方降级为原文，避免 SW 被回收导致 UI 永久卡住。
+ */
+export async function summarizeMarkdown(markdown: string, config: AiConfig): Promise<string> {
+  await ensureOffscreen();
+  const resp = await sendToOffscreen<SummarizeResponse>({
+    target: 'offscreen',
+    type: 'SUMMARIZE',
+    markdown,
+    config,
+  });
+  if (!resp?.ok || !resp.content) {
+    throw new Error(resp?.error || 'AI 处理未返回结果');
+  }
+  return resp.content;
 }

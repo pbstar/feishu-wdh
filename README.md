@@ -106,7 +106,7 @@ npm run build
 - **Content Script** – 只读提取文档 DOM，边滚边采并就地抓图
 - **自研转换器** – 结构化节点树 → GFM Markdown（`src/converter/`）
 - **JSZip** – 客户端 ZIP 打包
-- **Offscreen Document + chrome.downloads** – 在离屏文档中生成 Blob URL，再由 service worker 触发下载（规避 MV3 SW 无 DOM API 的限制）
+- **Offscreen Document + chrome.downloads** – 长任务（AI 请求、生成 Blob URL）在离屏文档中执行，规避 MV3 service worker 生命周期限制；下载仍由 service worker 触发
 - **Vite + @crxjs/vite-plugin** – 构建打包
 
 ## 项目结构
@@ -119,7 +119,7 @@ feishu-wdh/
 │   ├── ai/           # 大模型调用与总结精简
 │   ├── export/       # ZIP 打包、下载
 │   ├── background/   # service worker：消息路由、编排导出流程
-│   ├── offscreen/    # 离屏文档：Blob URL 触发下载（规避 SW 限制）
+│   ├── offscreen/    # 离屏文档：AI 请求、Blob URL 触发下载（规避 SW 生命周期限制）
 │   ├── shared/       # 跨模块类型、消息、存储封装
 │   ├── styles/       # 公共样式
 │   └── popup/        # 扩展弹窗 UI（含 AI 配置设置视图）

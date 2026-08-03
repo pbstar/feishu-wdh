@@ -4,6 +4,10 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.0.3] - 2026-08-03
+
+- 修复：AI 请求移入 offscreen document 执行，规避 MV3 service worker 生命周期回收导致的导出永久卡在「正在调用 AI 处理内容」；请求超时后仍会明确报错并降级导出原文
+
 ## [0.0.2] - 2026-07-31
 
 - 修复：AI 总结超时未覆盖响应体读取，界面可能长时间卡在「正在调用 AI 处理内容」；超时放宽至 120 秒，超时自动降级导出原文

@@ -1,20 +1,6 @@
 import { sanitizeFilename } from './zip';
-
-const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
-
-/** 确保 offscreen document 已创建（幂等） */
-async function ensureOffscreen(): Promise<void> {
-  const existing = await chrome.runtime.getContexts({
-    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
-  });
-  if (existing.length > 0) return;
-
-  await chrome.offscreen.createDocument({
-    url: OFFSCREEN_PATH,
-    reasons: [chrome.offscreen.Reason.BLOBS],
-    justification: '将导出的 ZIP 转为 Blob URL 以触发下载',
-  });
-}
+import { ensureOffscreen, sendToOffscreen } from '../shared/offscreen';
+import type { CreateBlobUrlRequest, CreateBlobUrlResponse } from '../shared/offscreen';
 
 /**
  * 触发 ZIP 下载。offscreen 负责把 base64 转成 Blob URL（SW 无此 DOM API），
@@ -23,13 +9,15 @@ async function ensureOffscreen(): Promise<void> {
  */
 export async function downloadZip(zipBase64: string, title: string): Promise<string> {
   const filename = `${sanitizeFilename(title)}.zip`;
+  // AI 阶段可能已创建过 offscreen，此处幂等复用
   await ensureOffscreen();
 
-  const resp = (await chrome.runtime.sendMessage({
+  const req: CreateBlobUrlRequest = {
     target: 'offscreen',
     type: 'CREATE_BLOB_URL',
     base64: zipBase64,
-  })) as { ok: boolean; url?: string; error?: string } | undefined;
+  };
+  const resp = await sendToOffscreen<CreateBlobUrlResponse | undefined>(req);
 
   if (!resp?.ok || !resp.url) {
     throw new Error(resp?.error || '生成下载链接失败');
