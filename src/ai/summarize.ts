@@ -1,10 +1,10 @@
 import type { AiConfig } from '../shared/types';
 import { getPrompt, getTemperature } from './prompts';
-import { ensureOffscreen, sendToOffscreen } from '../shared/offscreen';
-import type { SummarizeResponse } from '../shared/offscreen';
+import { ensureOffscreen, sendToOffscreen, type SummarizeResponse } from '../shared/offscreen';
 
-/** AI 请求超时时间（毫秒）：超长文档处理较慢，留足余量 */
-const REQUEST_TIMEOUT_MS = 120_000;
+/** AI 请求超时时间（毫秒）：长文档处理较慢，给足 5 分钟。
+ *  请求在 offscreen 中执行，SW 等待期间由心跳消息与挂起通道保活，不受其生命周期上限约束 */
+const REQUEST_TIMEOUT_MS = 300_000;
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';

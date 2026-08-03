@@ -3,6 +3,7 @@
 // 但 chrome.downloads 在 offscreen 文档中不可用，下载动作由 service worker 完成。
 
 import { runSummarizeRequest } from '../ai/summarize';
+import { reportProgress } from '../shared/messaging';
 import type {
   CreateBlobUrlRequest,
   CreateBlobUrlResponse,
@@ -51,10 +52,20 @@ async function handleSummarize(
   msg: SummarizeRequest,
   sendResponse: (response: SummarizeResponse) => void,
 ): Promise<void> {
+  // 长请求期间周期性上报已等待时长：给用户反馈，同时消息到达 SW 即重置其生命周期，
+  // 避免 SW 被 MV3 生命周期回收导致导出静默中断
+  const startedAt = Date.now();
+  const heartbeat = setInterval(() => {
+    const seconds = Math.round((Date.now() - startedAt) / 1000);
+    reportProgress({ stage: 'summarizing', message: `AI 处理中，已等待 ${seconds} 秒…` });
+  }, 15_000);
+
   try {
     const content = await runSummarizeRequest(msg.markdown, msg.config);
     sendResponse({ ok: true, content });
   } catch (err) {
     sendResponse({ ok: false, error: (err as Error).message });
+  } finally {
+    clearInterval(heartbeat);
   }
 }

@@ -1,23 +1,12 @@
 import { loadAiConfig } from '../shared/storage';
-import { reportProgress } from '../shared/messaging';
-import type {
-  ExportDoneMsg,
-  ExtractResultMsg,
-  RuntimeMessage,
-} from '../shared/types';
+import { reportDone, reportProgress } from '../shared/messaging';
+import type { ExtractResultMsg, RuntimeMessage } from '../shared/types';
 import { toMarkdown } from '../converter';
 import { summarizeMarkdown } from '../ai/summarize';
 import { packageZip } from '../export/zip';
 import { downloadZip } from '../export/download';
 
 const FEISHU_HOST = /(feishu\.cn|larksuite\.com)$/i;
-
-function reportDone(result: Omit<ExportDoneMsg, 'type'>): void {
-  const msg: ExportDoneMsg = { type: 'EXPORT_DONE', ...result };
-  chrome.runtime.sendMessage(msg).catch(() => {
-    /* popup 可能已关闭 */
-  });
-}
 
 async function getActiveFeishuTab(): Promise<chrome.tabs.Tab> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -60,7 +49,9 @@ async function runExport(): Promise<void> {
     // 转 Markdown
     let markdown = toMarkdown(doc);
 
-    // 可选 AI 总结
+    // 可选 AI 总结：请求在 offscreen 中执行，SW 只需等待其响应。
+    // AI 长等待期间 offscreen 会周期性上报进度，消息到达即重置 SW 生命周期，
+    // 加上挂起的消息通道，SW 不会被 MV3 生命周期回收。
     const aiConfig = await loadAiConfig();
     if (aiConfig.enabled && aiConfig.apiKey && aiConfig.apiUrl && aiConfig.model) {
       reportProgress({ stage: 'summarizing', message: '正在调用 AI 处理内容…' });

@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.0.4] - 2026-08-03
+
+- 优化：AI 请求超时放宽至 5 分钟，适配长文档处理耗时
+- 优化：AI 长请求期间周期性上报已等待时长，消息同时重置 service worker 生命周期，避免长导出被静默回收，界面也不再长时间无反馈
+- 优化：合并向 popup 发送进度/结果的消息封装
+
 ## [0.0.3] - 2026-08-03
 
 - 修复：AI 请求移入 offscreen document 执行，规避 MV3 service worker 生命周期回收导致的导出永久卡在「正在调用 AI 处理内容」；请求超时后仍会明确报错并降级导出原文
