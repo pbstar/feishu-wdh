@@ -108,22 +108,25 @@ export interface FetchedImage {
 }
 
 // ── 配置 ──
-export type AiGranularity = 'summary' | 'perParagraph' | 'dedupeOnly';
+/** AI 用途：文档优化 / 前端研发任务总结 */
+export type AiPurpose = 'optimize' | 'tasks';
 
 export interface AiConfig {
+  /** 文档优化：导出时额外生成 AI 优化版 Markdown */
   enabled: boolean;
+  /** 前端研发任务总结：导出时额外生成任务清单 */
+  tasksEnabled: boolean;
   apiUrl: string;
   apiKey: string;
   model: string;
-  granularity: AiGranularity;
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
   enabled: false,
+  tasksEnabled: false,
   apiUrl: 'https://api.openai.com/v1/chat/completions',
   apiKey: '',
   model: 'gpt-4o-mini',
-  granularity: 'summary',
 };
 
 // ── 消息协议 ──
@@ -131,7 +134,7 @@ export type ExportStage =
   | 'idle'
   | 'scrolling'
   | 'extracting'
-  | 'summarizing'
+  | 'ai'
   | 'packaging'
   | 'done'
   | 'error';

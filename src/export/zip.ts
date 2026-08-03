@@ -16,16 +16,21 @@ export function sanitizeFilename(name: string): string {
 
 /**
  * 打包 Markdown + 图片为 ZIP，返回 base64（不含 data 前缀）。
+ * extra 为附加的 Markdown 文件（如 AI 优化版、任务清单），按给定文件名写入。
  * 在 service worker 中运行，故用 base64 输出（无法用 blob URL）。
  */
 export async function packageZip(
   title: string,
   markdown: string,
   images: FetchedImage[],
+  extra: Array<{ filename: string; content: string }> = [],
 ): Promise<string> {
   const zip = new JSZip();
   const safeTitle = sanitizeFilename(title);
   zip.file(`${safeTitle}.md`, markdown);
+  for (const item of extra) {
+    zip.file(item.filename, item.content);
+  }
 
   const imagesFolder = zip.folder('images');
   for (const img of images) {

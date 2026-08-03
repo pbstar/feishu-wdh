@@ -2,8 +2,8 @@ import { loadAiConfig } from '../shared/storage';
 import { reportDone, reportProgress } from '../shared/messaging';
 import type { ExtractResultMsg, RuntimeMessage } from '../shared/types';
 import { toMarkdown } from '../converter';
-import { summarizeMarkdown } from '../ai/summarize';
-import { packageZip } from '../export/zip';
+import { requestAiContent } from '../ai/request';
+import { packageZip, sanitizeFilename } from '../export/zip';
 import { downloadZip } from '../export/download';
 
 const FEISHU_HOST = /(feishu\.cn|larksuite\.com)$/i;
@@ -46,29 +46,37 @@ async function runExport(): Promise<void> {
 
     const imagesFailed = images.filter((i) => i.failed).length;
 
-    // 转 Markdown
-    let markdown = toMarkdown(doc);
+    // 转 Markdown：始终导出原文
+    const markdown = toMarkdown(doc);
 
-    // 可选 AI 总结：请求在 offscreen 中执行，SW 只需等待其响应。
-    // AI 长等待期间 offscreen 会周期性上报进度，消息到达即重置 SW 生命周期，
-    // 加上挂起的消息通道，SW 不会被 MV3 生命周期回收。
+    // 可选 AI 能力：文档优化 / 前端研发任务总结，各额外生成一份 Markdown 写入 ZIP。
+    // AI 请求在 offscreen 执行，其周期性心跳消息与挂起通道会保活 SW，避免长等待被回收。
     const aiConfig = await loadAiConfig();
-    if (aiConfig.enabled && aiConfig.apiKey && aiConfig.apiUrl && aiConfig.model) {
-      reportProgress({ stage: 'summarizing', message: '正在调用 AI 处理内容…' });
-      try {
-        markdown = await summarizeMarkdown(markdown, aiConfig);
-      } catch (err) {
-        // AI 失败不阻断导出，降级为原文
-        reportProgress({
-          stage: 'summarizing',
-          message: `AI 处理失败，将导出原文：${(err as Error).message}`,
-        });
-      }
+    const aiReady = !!(aiConfig.apiKey && aiConfig.apiUrl && aiConfig.model);
+    const safeTitle = sanitizeFilename(doc.title);
+    const extra: Array<{ filename: string; content: string }> = [];
+
+    if (aiReady && (aiConfig.enabled || aiConfig.tasksEnabled)) {
+      reportProgress({ stage: 'ai', message: '正在调用 AI 处理…' });
+      // 两个 AI 请求并行发出，省去串行等待；任一失败均不阻断导出，仅跳过对应文件
+      const optimize = aiConfig.enabled
+        ? requestAiContent(markdown, aiConfig, 'optimize').then(
+            (content) => extra.push({ filename: `${safeTitle}-AI优化.md`, content }),
+            (err) => reportProgress({ stage: 'ai', message: `AI 文档优化失败，已跳过：${(err as Error).message}` }),
+          )
+        : Promise.resolve();
+      const tasks = aiConfig.tasksEnabled
+        ? requestAiContent(markdown, aiConfig, 'tasks').then(
+            (content) => extra.push({ filename: `${safeTitle}-任务清单.md`, content }),
+            (err) => reportProgress({ stage: 'ai', message: `AI 任务总结失败，已跳过：${(err as Error).message}` }),
+          )
+        : Promise.resolve();
+      await Promise.all([optimize, tasks]);
     }
 
     // 打包并下载
     reportProgress({ stage: 'packaging', message: '正在打包 ZIP…' });
-    const zipBase64 = await packageZip(doc.title, markdown, images);
+    const zipBase64 = await packageZip(doc.title, markdown, images, extra);
     const filename = await downloadZip(zipBase64, doc.title);
 
     reportProgress({ stage: 'done', message: '导出完成' });

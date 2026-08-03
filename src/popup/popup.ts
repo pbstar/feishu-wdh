@@ -1,4 +1,4 @@
-import type { AiConfig, AiGranularity, ExportStage, RuntimeMessage } from '../shared/types';
+import type { AiConfig, ExportStage, RuntimeMessage } from '../shared/types';
 import { loadAiConfig, saveAiConfig } from '../shared/storage';
 
 // ── 主视图元素 ──
@@ -16,11 +16,11 @@ const aiHint = document.getElementById('ai-hint') as HTMLSpanElement;
 
 // ── 设置视图元素 ──
 const enabledEl = document.getElementById('ai-enabled') as HTMLInputElement;
+const tasksEnabledEl = document.getElementById('ai-tasks-enabled') as HTMLInputElement;
 const fieldsEl = document.getElementById('ai-fields') as HTMLDivElement;
 const apiUrlEl = document.getElementById('api-url') as HTMLInputElement;
 const apiKeyEl = document.getElementById('api-key') as HTMLInputElement;
 const modelEl = document.getElementById('model') as HTMLInputElement;
-const granularityEl = document.getElementById('granularity') as HTMLSelectElement;
 const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
 const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
 
@@ -28,7 +28,7 @@ const STAGE_PROGRESS: Record<ExportStage, number> = {
   idle: 0,
   scrolling: 30,
   extracting: 55,
-  summarizing: 75,
+  ai: 75,
   packaging: 90,
   done: 100,
   error: 0,
@@ -101,31 +101,32 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
 
 // ── AI 配置 ──
 function syncFieldsState(): void {
-  fieldsEl.classList.toggle('disabled', !enabledEl.checked);
+  fieldsEl.classList.toggle('disabled', !enabledEl.checked && !tasksEnabledEl.checked);
 }
 
 enabledEl.addEventListener('change', syncFieldsState);
+tasksEnabledEl.addEventListener('change', syncFieldsState);
 
 async function loadSettingsForm(): Promise<void> {
   const cfg = await loadAiConfig();
   enabledEl.checked = cfg.enabled;
+  tasksEnabledEl.checked = cfg.tasksEnabled;
   apiUrlEl.value = cfg.apiUrl;
   apiKeyEl.value = cfg.apiKey;
   modelEl.value = cfg.model;
-  granularityEl.value = cfg.granularity;
   syncFieldsState();
 }
 
 saveBtn.addEventListener('click', async () => {
   const config: AiConfig = {
     enabled: enabledEl.checked,
+    tasksEnabled: tasksEnabledEl.checked,
     apiUrl: apiUrlEl.value.trim(),
     apiKey: apiKeyEl.value.trim(),
     model: modelEl.value.trim(),
-    granularity: granularityEl.value as AiGranularity,
   };
 
-  if (config.enabled && (!config.apiUrl || !config.apiKey || !config.model)) {
+  if ((config.enabled || config.tasksEnabled) && (!config.apiUrl || !config.apiKey || !config.model)) {
     saveStatus.textContent = '需填写完整的 API 地址、密钥与模型名称';
     saveStatus.style.color = 'var(--md-error)';
     return;
@@ -140,7 +141,12 @@ saveBtn.addEventListener('click', async () => {
 // ── AI 状态提示 ──
 async function refreshAiHint(): Promise<void> {
   const cfg = await loadAiConfig();
-  aiHint.textContent = cfg.enabled ? '✓ AI 总结精简已开启' : 'AI 总结精简未开启，点击右上角齿轮配置';
+  const features: string[] = [];
+  if (cfg.enabled) features.push('文档优化');
+  if (cfg.tasksEnabled) features.push('任务总结');
+  aiHint.textContent = features.length
+    ? `✓ AI ${features.join('、')}已开启`
+    : 'AI 功能未开启，点击右上角齿轮配置';
 }
 
 // 初始化

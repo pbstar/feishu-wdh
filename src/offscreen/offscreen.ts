@@ -2,14 +2,14 @@
 // MV3 service worker 生命周期受限（空闲回收 + 硬上限），长任务必须在此执行；
 // 但 chrome.downloads 在 offscreen 文档中不可用，下载动作由 service worker 完成。
 
-import { runSummarizeRequest } from '../ai/summarize';
+import { runAiRequest } from '../ai/request';
 import { reportProgress } from '../shared/messaging';
 import type {
+  AiRequest,
+  AiResponse,
   CreateBlobUrlRequest,
   CreateBlobUrlResponse,
   OffscreenRequest,
-  SummarizeRequest,
-  SummarizeResponse,
 } from '../shared/offscreen';
 
 function base64ToBlob(base64: string, mime: string): Blob {
@@ -27,8 +27,8 @@ chrome.runtime.onMessage.addListener((msg: OffscreenRequest, _sender, sendRespon
     return true; // 异步响应
   }
 
-  if (msg.type === 'SUMMARIZE') {
-    void handleSummarize(msg, sendResponse);
+  if (msg.type === 'AI_REQUEST') {
+    void handleAiRequest(msg, sendResponse);
     return true; // 异步响应
   }
 });
@@ -48,20 +48,20 @@ function handleCreateBlobUrl(
   }
 }
 
-async function handleSummarize(
-  msg: SummarizeRequest,
-  sendResponse: (response: SummarizeResponse) => void,
+async function handleAiRequest(
+  msg: AiRequest,
+  sendResponse: (response: AiResponse) => void,
 ): Promise<void> {
   // 长请求期间周期性上报已等待时长：给用户反馈，同时消息到达 SW 即重置其生命周期，
   // 避免 SW 被 MV3 生命周期回收导致导出静默中断
   const startedAt = Date.now();
   const heartbeat = setInterval(() => {
     const seconds = Math.round((Date.now() - startedAt) / 1000);
-    reportProgress({ stage: 'summarizing', message: `AI 处理中，已等待 ${seconds} 秒…` });
+    reportProgress({ stage: 'ai', message: `AI 处理中，已等待 ${seconds} 秒…` });
   }, 15_000);
 
   try {
-    const content = await runSummarizeRequest(msg.markdown, msg.config);
+    const content = await runAiRequest(msg.markdown, msg.config, msg.purpose);
     sendResponse({ ok: true, content });
   } catch (err) {
     sendResponse({ ok: false, error: (err as Error).message });

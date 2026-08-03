@@ -39,17 +39,28 @@
       <section id="view-settings" class="view" hidden>
         <header class="popup-header">
           <button id="back-btn" class="icon-btn" title="返回">←</button>
-          <h1 class="popup-title">AI 总结精简设置</h1>
+          <h1 class="popup-title">AI 设置</h1>
           <span class="icon-btn-placeholder"></span>
         </header>
 
         <div class="switch-row">
           <div>
-            <div class="switch-label">启用 AI 总结精简</div>
-            <div class="switch-desc">导出前调用大模型总结、精简正文，默认关闭。</div>
+            <div class="switch-label">AI 文档优化</div>
+            <div class="switch-desc">导出时额外生成一份 AI 优化版 Markdown，默认关闭。</div>
           </div>
           <label class="switch">
             <input type="checkbox" id="ai-enabled" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="switch-row">
+          <div>
+            <div class="switch-label">AI 前端研发任务总结</div>
+            <div class="switch-desc">导出时基于需求文档自动梳理前端研发待开发任务，生成任务清单，默认关闭。</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="ai-tasks-enabled" />
             <span class="slider"></span>
           </label>
         </div>
@@ -67,14 +78,6 @@
             <label class="field-label" for="model">模型名称</label>
             <input type="text" id="model" placeholder="gpt-4o-mini、deepseek-chat 等" />
           </div>
-          <div class="field">
-            <label class="field-label" for="granularity">总结粒度</label>
-            <select id="granularity">
-              <option value="summary">精简摘要 — 提炼为简短要点</option>
-              <option value="perParagraph">逐段精简 — 保留结构，逐段去冗余</option>
-              <option value="dedupeOnly">仅去冗余 — 保留原意，仅删重复</option>
-            </select>
-          </div>
         </div>
 
         <div class="actions">
@@ -83,7 +86,7 @@
         </div>
 
         <p class="privacy-note">
-          配置仅保存在浏览器本地。开启后文档内容会发送至你填写的大模型服务商，请自行确认其隐私政策。
+          配置仅保存在浏览器本地。开启任一 AI 功能后，文档内容会发送至你填写的大模型服务商，请自行确认其隐私政策。
         </p>
       </section>
     </div>
