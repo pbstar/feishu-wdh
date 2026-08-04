@@ -15,9 +15,7 @@ const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
 const aiHint = document.getElementById('ai-hint') as HTMLSpanElement;
 
 // ── 设置视图元素 ──
-const enabledEl = document.getElementById('ai-enabled') as HTMLInputElement;
 const tasksEnabledEl = document.getElementById('ai-tasks-enabled') as HTMLInputElement;
-const fieldsEl = document.getElementById('ai-fields') as HTMLDivElement;
 const apiUrlEl = document.getElementById('api-url') as HTMLInputElement;
 const apiKeyEl = document.getElementById('api-key') as HTMLInputElement;
 const modelEl = document.getElementById('model') as HTMLInputElement;
@@ -100,34 +98,25 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
 });
 
 // ── AI 配置 ──
-function syncFieldsState(): void {
-  fieldsEl.classList.toggle('disabled', !enabledEl.checked && !tasksEnabledEl.checked);
-}
-
-enabledEl.addEventListener('change', syncFieldsState);
-tasksEnabledEl.addEventListener('change', syncFieldsState);
-
 async function loadSettingsForm(): Promise<void> {
   const cfg = await loadAiConfig();
-  enabledEl.checked = cfg.enabled;
   tasksEnabledEl.checked = cfg.tasksEnabled;
   apiUrlEl.value = cfg.apiUrl;
   apiKeyEl.value = cfg.apiKey;
   modelEl.value = cfg.model;
-  syncFieldsState();
 }
 
 saveBtn.addEventListener('click', async () => {
   const config: AiConfig = {
-    enabled: enabledEl.checked,
     tasksEnabled: tasksEnabledEl.checked,
     apiUrl: apiUrlEl.value.trim(),
     apiKey: apiKeyEl.value.trim(),
     model: modelEl.value.trim(),
   };
 
-  if ((config.enabled || config.tasksEnabled) && (!config.apiUrl || !config.apiKey || !config.model)) {
-    saveStatus.textContent = '需填写完整的 API 地址、密钥与模型名称';
+  // AI 文档优化为必开功能，API 配置必须完整
+  if (!config.apiUrl || !config.apiKey || !config.model) {
+    saveStatus.textContent = 'AI 优化为必开功能，需填写完整的 API 地址、密钥与模型名称';
     saveStatus.style.color = 'var(--md-error)';
     return;
   }
@@ -141,12 +130,13 @@ saveBtn.addEventListener('click', async () => {
 // ── AI 状态提示 ──
 async function refreshAiHint(): Promise<void> {
   const cfg = await loadAiConfig();
-  const features: string[] = [];
-  if (cfg.enabled) features.push('文档优化');
-  if (cfg.tasksEnabled) features.push('任务总结');
-  aiHint.textContent = features.length
-    ? `✓ AI ${features.join('、')}已开启`
-    : 'AI 功能未开启，点击右上角齿轮配置';
+  if (!(cfg.apiUrl && cfg.apiKey && cfg.model)) {
+    aiHint.textContent = 'AI 文档优化已开启，请先点击 ⚙ 完成 API 配置';
+    return;
+  }
+  const features = ['AI 文档优化已开启'];
+  if (cfg.tasksEnabled) features.push('任务总结已开启');
+  aiHint.textContent = `✓ ${features.join('、')}`;
 }
 
 // 初始化

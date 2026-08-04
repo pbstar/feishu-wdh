@@ -15,8 +15,8 @@ export function sanitizeFilename(name: string): string {
 }
 
 /**
- * 打包 Markdown + 图片为 ZIP，返回 base64（不含 data 前缀）。
- * extra 为附加的 Markdown 文件（如 AI 优化版、任务清单），按给定文件名写入。
+ * 打包 AI 优化版 Markdown + 图片为 ZIP，返回 base64（不含 data 前缀）。
+ * 主文件为「标题.md」，extra 为可选附加文件（如任务清单）。
  * 在 service worker 中运行，故用 base64 输出（无法用 blob URL）。
  */
 export async function packageZip(
