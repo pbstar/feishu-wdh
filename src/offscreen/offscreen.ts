@@ -48,24 +48,42 @@ function handleCreateBlobUrl(
   }
 }
 
+// 并发 AI 请求共享一条心跳上报：避免多个请求各自启动定时器，上报相同语义的
+// 「已等待 N 秒」文案导致弹出界面文案闪烁
+let inFlightAi = 0;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let heartbeatStartedAt = 0;
+
+function startAiHeartbeat(): void {
+  inFlightAi++;
+  if (inFlightAi > 1) return; // 已有心跳在跑，无需重复上报
+  heartbeatStartedAt = Date.now();
+  heartbeatTimer = setInterval(() => {
+    const seconds = Math.round((Date.now() - heartbeatStartedAt) / 1000);
+    reportProgress({ stage: 'ai', message: `AI 处理中，已等待 ${seconds} 秒…` });
+  }, 15_000);
+}
+
+function stopAiHeartbeat(): void {
+  inFlightAi--;
+  if (inFlightAi > 0) return;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
 async function handleAiRequest(
   msg: AiRequest,
   sendResponse: (response: AiResponse) => void,
 ): Promise<void> {
   // 长请求期间周期性上报已等待时长：给用户反馈，同时消息到达 SW 即重置其生命周期，
-  // 避免 SW 被 MV3 生命周期回收导致导出静默中断
-  const startedAt = Date.now();
-  const heartbeat = setInterval(() => {
-    const seconds = Math.round((Date.now() - startedAt) / 1000);
-    reportProgress({ stage: 'ai', message: `AI 处理中，已等待 ${seconds} 秒…` });
-  }, 15_000);
-
+  // 避免 SW 被 MV3 生命周期回收导致导出静默中断。并发请求共享同一条心跳。
+  startAiHeartbeat();
   try {
     const content = await runAiRequest(msg.markdown, msg.config, msg.purpose);
     sendResponse({ ok: true, content });
   } catch (err) {
     sendResponse({ ok: false, error: (err as Error).message });
   } finally {
-    clearInterval(heartbeat);
+    stopAiHeartbeat();
   }
 }

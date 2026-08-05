@@ -1,18 +1,6 @@
 import JSZip from 'jszip';
 import type { FetchedImage } from '../shared/types';
-
-/** 清理文件名中的非法字符 */
-export function sanitizeFilename(name: string): string {
-  return (
-    name
-      // 控制字符与不可见格式字符（零宽、BOM、方向控制符等），会导致 Invalid filename
-      .replace(/[\p{Cc}\p{Cf}]/gu, '')
-      .replace(/[\\/:*?"<>|.]/g, '_')
-      .replace(/\s+/g, ' ')
-      .slice(0, 120)
-      .trim() || '未命名文档'
-  );
-}
+import { sanitizeFilename } from '../shared/filename';
 
 /**
  * 打包 AI 优化版 Markdown + 图片为 ZIP，返回 base64（不含 data 前缀）。

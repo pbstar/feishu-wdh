@@ -1,5 +1,6 @@
-import type { AiConfig, ExportStage, ExportStateResp, RuntimeMessage } from '../shared/types';
+import type { AiConfig, ExportStage, ExportStateResp, ExtraKey, RuntimeMessage } from '../shared/types';
 import { loadAiConfig, saveAiConfig } from '../shared/storage';
+import { EXTRA_GOALS } from '../ai/extras';
 
 // ── 主视图元素 ──
 const viewMain = document.getElementById('view-main') as HTMLElement;
@@ -15,7 +16,7 @@ const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
 const aiHint = document.getElementById('ai-hint') as HTMLSpanElement;
 
 // ── 设置视图元素 ──
-const tasksEnabledEl = document.getElementById('ai-tasks-enabled') as HTMLInputElement;
+const extrasContainer = document.getElementById('ai-extras') as HTMLElement;
 const apiUrlEl = document.getElementById('api-url') as HTMLInputElement;
 const apiKeyEl = document.getElementById('api-key') as HTMLInputElement;
 const modelEl = document.getElementById('model') as HTMLInputElement;
@@ -124,9 +125,41 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
 });
 
 // ── AI 配置 ──
+/** 按注册表渲染支线任务开关行；后续新增支线任务无需改动此处 */
+function renderExtraSwitches(): void {
+  extrasContainer.innerHTML = '';
+  for (const goal of EXTRA_GOALS) {
+    const row = document.createElement('div');
+    row.className = 'switch-row';
+    row.innerHTML = `
+      <div>
+        <div class="switch-label">${goal.label}</div>
+        <div class="switch-desc">${goal.desc}</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="extra-${goal.key}" />
+        <span class="slider"></span>
+      </label>`;
+    extrasContainer.appendChild(row);
+  }
+}
+
+/** 收集各开关状态为 extras 对象 */
+function collectExtras(): Record<ExtraKey, boolean> {
+  const extras = {} as Record<ExtraKey, boolean>;
+  for (const goal of EXTRA_GOALS) {
+    const el = document.getElementById(`extra-${goal.key}`) as HTMLInputElement;
+    extras[goal.key] = el.checked;
+  }
+  return extras;
+}
+
 async function loadSettingsForm(): Promise<void> {
   const cfg = await loadAiConfig();
-  tasksEnabledEl.checked = cfg.tasksEnabled;
+  for (const goal of EXTRA_GOALS) {
+    const el = document.getElementById(`extra-${goal.key}`) as HTMLInputElement;
+    el.checked = cfg.extras[goal.key];
+  }
   apiUrlEl.value = cfg.apiUrl;
   apiKeyEl.value = cfg.apiKey;
   modelEl.value = cfg.model;
@@ -134,7 +167,7 @@ async function loadSettingsForm(): Promise<void> {
 
 saveBtn.addEventListener('click', async () => {
   const config: AiConfig = {
-    tasksEnabled: tasksEnabledEl.checked,
+    extras: collectExtras(),
     apiUrl: apiUrlEl.value.trim(),
     apiKey: apiKeyEl.value.trim(),
     model: modelEl.value.trim(),
@@ -161,11 +194,14 @@ async function refreshAiHint(): Promise<void> {
     return;
   }
   const features = ['AI 文档优化已开启'];
-  if (cfg.tasksEnabled) features.push('任务总结已开启');
+  for (const goal of EXTRA_GOALS) {
+    if (cfg.extras[goal.key]) features.push(`${goal.hint}已开启`);
+  }
   aiHint.textContent = `✓ ${features.join('、')}`;
 }
 
 // 初始化
+renderExtraSwitches();
 void loadSettingsForm();
 void refreshAiHint();
 void restoreState();

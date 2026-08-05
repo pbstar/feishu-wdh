@@ -3,7 +3,8 @@ import { reportDone, reportProgress } from '../shared/messaging';
 import type { ExportProgress, ExportStateResult, ExtractResultMsg, RuntimeMessage } from '../shared/types';
 import { toMarkdown } from '../converter';
 import { requestAiContent } from '../ai/request';
-import { packageZip, sanitizeFilename } from '../export/zip';
+import { enabledExtraGoals } from '../ai/extras';
+import { packageZip } from '../export/zip';
 import { downloadZip } from '../export/download';
 
 const FEISHU_HOST = /(feishu\.cn|larksuite\.com)$/i;
@@ -70,22 +71,30 @@ async function runExport(): Promise<void> {
     // 原文仅作为 AI 输入，不再写入 ZIP
     const markdown = toMarkdown(doc);
 
-    // 主输出：AI 优化版。必开且失败即整体导出失败，不再降级导出原文。
+    // 并行发起 AI 请求：文档优化为必开主输出，与所有启用的支线任务相互独立同时执行，
+    // 以缩短总耗时。优化失败即整体失败；支线任务失败仅跳过对应附加文件并提示。
     // AI 请求在 offscreen 执行，其周期性心跳消息与挂起通道会保活 SW，避免长等待被回收。
-    trackProgress({ stage: 'ai', message: '正在调用 AI 优化文档…' });
-    const optimized = await requestAiContent(markdown, aiConfig, 'optimize');
+    const goals = enabledExtraGoals(aiConfig.extras);
+    const aiLabel = goals.length ? '正在调用 AI 优化文档并生成附加任务…' : '正在调用 AI 优化文档…';
+    trackProgress({ stage: 'ai', message: aiLabel });
 
-    // 可选附加：前端研发任务清单。失败仅跳过该文件并提示，不阻断主导出。
-    const extra: Array<{ filename: string; content: string }> = [];
-    if (aiConfig.tasksEnabled) {
-      trackProgress({ stage: 'ai', message: '正在生成任务清单…' });
-      try {
-        const tasks = await requestAiContent(markdown, aiConfig, 'tasks');
-        extra.push({ filename: `${sanitizeFilename(doc.title)}-任务清单.md`, content: tasks });
-      } catch (err) {
-        trackProgress({ stage: 'ai', message: `任务清单生成失败，已跳过：${(err as Error).message}` });
-      }
-    }
+    const optimizePromise = requestAiContent(markdown, aiConfig, 'optimize');
+    const goalsPromise = Promise.all(
+      goals.map((goal) =>
+        requestAiContent(markdown, aiConfig, goal.key)
+          .then((content) => ({ filename: goal.filename(doc.title), content }))
+          .catch((err) => {
+            trackProgress({ stage: 'ai', message: `${goal.skipMessage}：${(err as Error).message}` });
+            return null;
+          }),
+      ),
+    );
+
+    // 先等必开主输出：优化失败立即中断导出，不必再等支线任务
+    const optimized = await optimizePromise;
+    const extra = (await goalsPromise).filter(
+      (item): item is { filename: string; content: string } => item !== null,
+    );
 
     // 打包并下载
     trackProgress({ stage: 'packaging', message: '正在打包 ZIP…' });

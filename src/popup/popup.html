@@ -59,16 +59,8 @@
           </div>
         </div>
 
-        <div class="switch-row">
-          <div>
-            <div class="switch-label">AI 前端研发任务总结</div>
-            <div class="switch-desc">可选：导出时基于需求文档自动梳理前端研发待开发任务，生成任务清单，默认关闭。</div>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="ai-tasks-enabled" />
-            <span class="slider"></span>
-          </label>
-        </div>
+        <!-- 支线任务开关：由 src/ai/extras.ts 注册表数据驱动渲染 -->
+        <div id="ai-extras" class="ai-extras"></div>
 
         <div class="actions">
           <button id="save-btn" class="btn-primary">保存设置</button>

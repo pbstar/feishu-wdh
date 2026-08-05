@@ -1,4 +1,4 @@
-import { sanitizeFilename } from './zip';
+import { sanitizeFilename } from '../shared/filename';
 import { ensureOffscreen, sendToOffscreen } from '../shared/offscreen';
 import type { CreateBlobUrlRequest, CreateBlobUrlResponse } from '../shared/offscreen';
 
