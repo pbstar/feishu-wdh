@@ -1,4 +1,4 @@
-import type { AiConfig, ExportStage, RuntimeMessage } from '../shared/types';
+import type { AiConfig, ExportStage, ExportStateResp, RuntimeMessage } from '../shared/types';
 import { loadAiConfig, saveAiConfig } from '../shared/storage';
 
 // ── 主视图元素 ──
@@ -64,14 +64,48 @@ function finish(running_: boolean): void {
   spinner.hidden = !running_;
 }
 
+/** 渲染导出最终结果（成功/失败），EXPORT_DONE 广播与打开时恢复共用，幂等 */
+function renderDone(result: { ok: boolean; filename?: string; imagesFailed?: number; error?: string }): void {
+  finish(false);
+  if (result.ok) {
+    const failNote = result.imagesFailed ? `（${result.imagesFailed} 张图片下载失败，已保留原链接）` : '';
+    setStatus(`导出完成：${result.filename}${failNote}`, 'success');
+    setProgress('done');
+  } else {
+    setStatus(result.error || '导出失败', 'error');
+    progressTrack.hidden = true;
+  }
+}
+
 exportBtn.addEventListener('click', () => {
   if (running) return;
   finish(true);
   setStatus('正在启动导出…');
   setProgress('idle');
   const msg: RuntimeMessage = { type: 'START_EXPORT' };
-  chrome.runtime.sendMessage(msg);
+  chrome.runtime.sendMessage(msg).catch(() => {
+    /* background 不 sendResponse，忽略 Promise 拒绝 */
+  });
 });
+
+// popup 每次打开都是全新页面（切走标签页即关闭），导出任务由后台 SW 持有。
+// 打开时主动拉取快照恢复：进行中 → 显示进度并禁用按钮；已有上次结果 → 显示完成/失败。
+async function restoreState(): Promise<void> {
+  let resp: ExportStateResp | undefined;
+  try {
+    resp = (await chrome.runtime.sendMessage({ type: 'GET_EXPORT_STATE' })) as ExportStateResp | undefined;
+  } catch {
+    /* SW 未就绪/重启：按待机处理 */
+  }
+  if (!resp) return;
+  if (resp.running) {
+    finish(true);
+    setStatus(resp.progress.message || '正在导出…', 'normal');
+    setProgress(resp.progress.stage);
+  } else if (resp.result) {
+    renderDone(resp.result);
+  }
+}
 
 chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
   if (msg.type === 'PROGRESS') {
@@ -85,15 +119,7 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
     setStatus(message || '', 'normal');
     setProgress(stage);
   } else if (msg.type === 'EXPORT_DONE') {
-    finish(false);
-    if (msg.ok) {
-      const failNote = msg.imagesFailed ? `（${msg.imagesFailed} 张图片下载失败，已保留原链接）` : '';
-      setStatus(`导出完成：${msg.filename}${failNote}`, 'success');
-      setProgress('done');
-    } else {
-      setStatus(msg.error || '导出失败', 'error');
-      progressTrack.hidden = true;
-    }
+    renderDone(msg);
   }
 });
 
@@ -142,3 +168,4 @@ async function refreshAiHint(): Promise<void> {
 // 初始化
 void loadSettingsForm();
 void refreshAiHint();
+void restoreState();

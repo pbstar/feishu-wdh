@@ -174,9 +174,33 @@ export interface ExportDoneMsg {
   error?: string;
 }
 
+/** popup → background：查询当前导出状态（popup 重新打开时恢复进度/上次结果） */
+export interface GetExportStateMsg {
+  type: 'GET_EXPORT_STATE';
+}
+
+/** 一次导出的最终结果（持久化到 storage，SW 回收后仍可恢复） */
+export interface ExportStateResult {
+  ok: boolean;
+  filename?: string;
+  imagesFailed?: number;
+  error?: string;
+  /** 完成时间戳（ms） */
+  finishedAt: number;
+}
+
+/** GET_EXPORT_STATE 的响应负载（非广播消息，不入 RuntimeMessage 联合） */
+export interface ExportStateResp {
+  running: boolean;
+  progress: ExportProgress;
+  /** 最近一次导出的最终结果；进行中或从未导出时为 undefined */
+  result?: ExportStateResult;
+}
+
 export type RuntimeMessage =
   | StartExportMsg
   | ExtractMsg
   | ExtractResultMsg
   | ProgressMsg
-  | ExportDoneMsg;
+  | ExportDoneMsg
+  | GetExportStateMsg;
