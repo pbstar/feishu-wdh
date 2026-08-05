@@ -32,12 +32,15 @@ export async function packageZip(
     zip.file(item.filename, item.content);
   }
 
-  const imagesFolder = zip.folder('images');
-  for (const img of images) {
-    if (img.failed || !img.base64 || !img.localPath) continue;
-    // localPath 形如 images/img-1.png，去掉前缀存入 images 文件夹
-    const filename = img.localPath.replace(/^images\//, '');
-    imagesFolder?.file(filename, img.base64, { base64: true });
+  // 仅当存在成功抓取的图片时才创建 images 文件夹，避免无图文档生成空目录
+  const succeeded = images.filter((img) => !img.failed && img.base64 && img.localPath);
+  if (succeeded.length) {
+    const imagesFolder = zip.folder('images');
+    for (const img of succeeded) {
+      // localPath 形如 images/img-1.png，去掉前缀存入 images 文件夹
+      const filename = img.localPath.replace(/^images\//, '');
+      imagesFolder?.file(filename, img.base64, { base64: true });
+    }
   }
 
   return zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });

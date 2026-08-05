@@ -48,6 +48,7 @@ export async function runAiRequest(
         model: config.model,
         messages,
         stream: false,
+        temperature: 0.5,
       }),
       signal: controller.signal,
     });
