@@ -1,8 +1,17 @@
 import { loadAiConfig, loadExportResult, saveExportResult } from '../shared/storage';
 import { reportDone, reportProgress } from '../shared/messaging';
-import type { ExportProgress, ExportStateResult, ExtractResultMsg, RuntimeMessage } from '../shared/types';
+import type {
+  AiConfig,
+  DocumentModel,
+  ExportProgress,
+  ExportStateResult,
+  ExtractResultMsg,
+  FetchedImage,
+  RuntimeMessage,
+} from '../shared/types';
+import { isAiConfigured } from '../shared/types';
 import { toMarkdown } from '../converter';
-import { requestAiContent } from '../ai/request';
+import { requestAiContent } from '../ai/client';
 import { enabledExtraGoals } from '../ai/extras';
 import { packageZip } from '../export/zip';
 import { downloadZip } from '../export/download';
@@ -33,6 +42,70 @@ function trackProgress(progress: ExportProgress): void {
   reportProgress(progress);
 }
 
+/** 向 content script 请求提取（含滚动预加载、抽取、抓图），并校验产出非空 */
+async function extractDoc(): Promise<{ doc: DocumentModel; images: FetchedImage[] }> {
+  const tab = await getActiveFeishuTab();
+
+  let extractResult: ExtractResultMsg;
+  try {
+    extractResult = await chrome.tabs.sendMessage(tab.id!, { type: 'EXTRACT' });
+  } catch {
+    throw new Error('无法连接到页面脚本，请刷新文档页面后重试');
+  }
+  if (extractResult.error) throw new Error(extractResult.error);
+
+  const { doc, images = [] } = extractResult;
+  if (!doc || !doc.blocks.length) {
+    throw new Error('未能提取到文档内容，请确认已打开飞书文档');
+  }
+  return { doc, images };
+}
+
+/**
+ * 并行发起 AI 请求：文档优化为主输出，与所有启用的支线任务相互独立同时执行，
+ * 以缩短总耗时。优化失败即整体失败；支线任务失败仅跳过对应附加文件并提示。
+ * AI 请求在 offscreen 执行，其周期性心跳消息与挂起通道会保活 SW，避免长等待被回收。
+ */
+async function runAiTasks(
+  markdown: string,
+  doc: DocumentModel,
+  cfg: AiConfig,
+): Promise<{ optimized: string; extra: Array<{ filename: string; content: string }> }> {
+  const goals = enabledExtraGoals(cfg.extras);
+  const aiLabel = goals.length ? '正在调用 AI 优化文档并生成附加任务…' : '正在调用 AI 优化文档…';
+  trackProgress({ stage: 'ai', message: aiLabel });
+
+  const optimizePromise = requestAiContent(markdown, cfg, 'optimize');
+  const goalsPromise = Promise.all(
+    goals.map((goal) =>
+      requestAiContent(markdown, cfg, goal.key)
+        .then((content) => ({ filename: goal.filename(doc.title), content }))
+        .catch((err) => {
+          trackProgress({ stage: 'ai', message: `${goal.skipMessage}：${(err as Error).message}` });
+          return null;
+        }),
+    ),
+  );
+
+  // 先等主输出：优化失败立即中断导出，不必再等支线任务
+  const optimized = await optimizePromise;
+  const extra = (await goalsPromise).filter(
+    (item): item is { filename: string; content: string } => item !== null,
+  );
+  return { optimized, extra };
+}
+
+/** 打包 ZIP 并触发下载，返回实际下载文件名 */
+async function deliver(
+  doc: DocumentModel,
+  optimized: string,
+  images: FetchedImage[],
+  extra: Array<{ filename: string; content: string }>,
+): Promise<string> {
+  const zipBase64 = await packageZip(doc.title, optimized, images, extra);
+  return downloadZip(zipBase64, doc.title);
+}
+
 async function runExport(): Promise<void> {
   if (exporting) {
     reportProgress({ stage: 'error', message: '已有导出进行中，请稍候再试' });
@@ -44,62 +117,23 @@ async function runExport(): Promise<void> {
     await saveExportResult(null);
     trackProgress({ stage: 'idle', message: '正在启动导出…' });
 
-    const tab = await getActiveFeishuTab();
-
-    // 向 content script 请求提取（含滚动预加载、抽取、抓图）
-    let extractResult: ExtractResultMsg;
-    try {
-      extractResult = await chrome.tabs.sendMessage(tab.id!, { type: 'EXTRACT' });
-    } catch {
-      throw new Error('无法连接到页面脚本，请刷新文档页面后重试');
-    }
-    if (extractResult.error) throw new Error(extractResult.error);
-
-    const { doc, images = [] } = extractResult;
-    if (!doc || !doc.blocks.length) {
-      throw new Error('未能提取到文档内容，请确认已打开飞书文档');
-    }
-
+    // 边滚边采：飞书虚拟滚动会回收离开视口的 DOM，须逐屏采集（见 content 侧实现）
+    const { doc, images } = await extractDoc();
     const imagesFailed = images.filter((i) => i.failed).length;
 
     // 导出依赖 AI 优化：配置不完整时直接报错，引导去设置页
     const aiConfig = await loadAiConfig();
-    if (!(aiConfig.apiUrl && aiConfig.apiKey && aiConfig.model)) {
+    if (!isAiConfigured(aiConfig)) {
       throw new Error('请先在设置中完成 AI 配置（API 地址、密钥与模型名称）');
     }
 
     // 原文仅作为 AI 输入，不再写入 ZIP
     const markdown = toMarkdown(doc);
-
-    // 并行发起 AI 请求：文档优化为主输出，与所有启用的支线任务相互独立同时执行，
-    // 以缩短总耗时。优化失败即整体失败；支线任务失败仅跳过对应附加文件并提示。
-    // AI 请求在 offscreen 执行，其周期性心跳消息与挂起通道会保活 SW，避免长等待被回收。
-    const goals = enabledExtraGoals(aiConfig.extras);
-    const aiLabel = goals.length ? '正在调用 AI 优化文档并生成附加任务…' : '正在调用 AI 优化文档…';
-    trackProgress({ stage: 'ai', message: aiLabel });
-
-    const optimizePromise = requestAiContent(markdown, aiConfig, 'optimize');
-    const goalsPromise = Promise.all(
-      goals.map((goal) =>
-        requestAiContent(markdown, aiConfig, goal.key)
-          .then((content) => ({ filename: goal.filename(doc.title), content }))
-          .catch((err) => {
-            trackProgress({ stage: 'ai', message: `${goal.skipMessage}：${(err as Error).message}` });
-            return null;
-          }),
-      ),
-    );
-
-    // 先等主输出：优化失败立即中断导出，不必再等支线任务
-    const optimized = await optimizePromise;
-    const extra = (await goalsPromise).filter(
-      (item): item is { filename: string; content: string } => item !== null,
-    );
+    const { optimized, extra } = await runAiTasks(markdown, doc, aiConfig);
 
     // 打包并下载
     trackProgress({ stage: 'packaging', message: '正在打包 ZIP…' });
-    const zipBase64 = await packageZip(doc.title, optimized, images, extra);
-    const filename = await downloadZip(zipBase64, doc.title);
+    const filename = await deliver(doc, optimized, images, extra);
 
     // 先持久化结果再进入同步收尾：storage 写入放在 trackProgress 之前，
     // 保证 done → exporting=false 之间无 await，避免状态查询观测到不一致组合

@@ -1,17 +1,5 @@
 import type { ExportDoneMsg, ExportProgress, ProgressMsg, RuntimeMessage } from './types';
 
-/** 注册运行时消息监听；返回反注册函数 */
-export function onRuntimeMessage(
-  handler: (
-    msg: RuntimeMessage,
-    sender: chrome.runtime.MessageSender,
-    sendResponse: (response?: unknown) => void,
-  ) => boolean | void,
-): () => void {
-  chrome.runtime.onMessage.addListener(handler);
-  return () => chrome.runtime.onMessage.removeListener(handler);
-}
-
 /** 向 popup 发送消息；popup 可能已关闭，发送失败时忽略 */
 function sendToPopup(msg: RuntimeMessage): void {
   chrome.runtime.sendMessage(msg).catch(() => {

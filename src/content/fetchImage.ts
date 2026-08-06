@@ -1,15 +1,16 @@
+const MIME_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+  'image/bmp': 'bmp',
+};
+
 /** 从 MIME 推断文件扩展名 */
 export function extFromMime(mime: string): string {
-  const map: Record<string, string> = {
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/gif': 'gif',
-    'image/webp': 'webp',
-    'image/svg+xml': 'svg',
-    'image/bmp': 'bmp',
-  };
-  return map[mime] || 'png';
+  return MIME_EXT[mime] || 'png';
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

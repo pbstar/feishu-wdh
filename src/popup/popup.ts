@@ -1,4 +1,5 @@
-import type { AiConfig, ExportStage, ExportStateResp, ExtraKey, RuntimeMessage } from '../shared/types';
+import type { AiConfig, ExportOutcome, ExportStage, ExportStateResp, ExtraKey, RuntimeMessage } from '../shared/types';
+import { isAiConfigured } from '../shared/types';
 import { loadAiConfig, saveAiConfig } from '../shared/storage';
 import { EXTRA_GOALS } from '../ai/extras';
 
@@ -59,28 +60,34 @@ function setProgress(stage: ExportStage): void {
   progressBar.style.width = `${STAGE_PROGRESS[stage]}%`;
 }
 
-function finish(running_: boolean): void {
-  running = running_;
-  exportBtn.disabled = running_;
-  spinner.hidden = !running_;
+function setRunning(next: boolean): void {
+  running = next;
+  exportBtn.disabled = next;
+  spinner.hidden = !next;
+}
+
+/** 展示导出失败态：错误文案 + 隐藏进度条 + 恢复可再次导出，多处失败分支共用 */
+function showError(message: string): void {
+  setStatus(message, 'error');
+  progressTrack.hidden = true;
+  setRunning(false);
 }
 
 /** 渲染导出最终结果（成功/失败），EXPORT_DONE 广播与打开时恢复共用，幂等 */
-function renderDone(result: { ok: boolean; filename?: string; imagesFailed?: number; error?: string }): void {
-  finish(false);
+function renderDone(result: ExportOutcome): void {
   if (result.ok) {
+    setRunning(false);
     const failNote = result.imagesFailed ? `（${result.imagesFailed} 张图片下载失败，已保留原链接）` : '';
     setStatus(`导出完成：${result.filename}${failNote}`, 'success');
     setProgress('done');
   } else {
-    setStatus(result.error || '导出失败', 'error');
-    progressTrack.hidden = true;
+    showError(result.error || '导出失败');
   }
 }
 
 exportBtn.addEventListener('click', () => {
   if (running) return;
-  finish(true);
+  setRunning(true);
   setStatus('正在启动导出…');
   setProgress('idle');
   const msg: RuntimeMessage = { type: 'START_EXPORT' };
@@ -100,7 +107,7 @@ async function restoreState(): Promise<void> {
   }
   if (!resp) return;
   if (resp.running) {
-    finish(true);
+    setRunning(true);
     setStatus(resp.progress.message || '正在导出…', 'normal');
     setProgress(resp.progress.stage);
   } else if (resp.result) {
@@ -112,9 +119,7 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
   if (msg.type === 'PROGRESS') {
     const { stage, message } = msg.progress;
     if (stage === 'error') {
-      setStatus(message || '导出失败', 'error');
-      progressTrack.hidden = true;
-      finish(false);
+      showError(message || '导出失败');
       return;
     }
     setStatus(message || '', 'normal');
@@ -125,40 +130,53 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
 });
 
 // ── AI 配置 ──
+// 支线任务开关行的 input 元素，key → element；渲染时填充，供收集/回填状态直接读取
+const extraInputs = new Map<ExtraKey, HTMLInputElement>();
+
 /** 按注册表渲染支线任务开关行；后续新增支线任务无需改动此处 */
 function renderExtraSwitches(): void {
   extrasContainer.innerHTML = '';
+  extraInputs.clear();
   for (const goal of EXTRA_GOALS) {
     const row = document.createElement('div');
     row.className = 'switch-row';
-    row.innerHTML = `
-      <div>
-        <div class="switch-label">${goal.label}</div>
-        <div class="switch-desc">${goal.desc}</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="extra-${goal.key}" />
-        <span class="slider"></span>
-      </label>`;
+
+    const info = document.createElement('div');
+    const label = document.createElement('div');
+    label.className = 'switch-label';
+    label.textContent = goal.label;
+    const desc = document.createElement('div');
+    desc.className = 'switch-desc';
+    desc.textContent = goal.desc;
+    info.append(label, desc);
+
+    const switchLabel = document.createElement('label');
+    switchLabel.className = 'switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    const slider = document.createElement('span');
+    slider.className = 'slider';
+    switchLabel.append(input, slider);
+
+    row.append(info, switchLabel);
     extrasContainer.appendChild(row);
+    extraInputs.set(goal.key, input);
   }
 }
 
 /** 收集各开关状态为 extras 对象 */
 function collectExtras(): Record<ExtraKey, boolean> {
   const extras = {} as Record<ExtraKey, boolean>;
-  for (const goal of EXTRA_GOALS) {
-    const el = document.getElementById(`extra-${goal.key}`) as HTMLInputElement;
-    extras[goal.key] = el.checked;
+  for (const [key, el] of extraInputs) {
+    extras[key] = el.checked;
   }
   return extras;
 }
 
 async function loadSettingsForm(): Promise<void> {
   const cfg = await loadAiConfig();
-  for (const goal of EXTRA_GOALS) {
-    const el = document.getElementById(`extra-${goal.key}`) as HTMLInputElement;
-    el.checked = cfg.extras[goal.key];
+  for (const [key, el] of extraInputs) {
+    el.checked = cfg.extras[key];
   }
   apiUrlEl.value = cfg.apiUrl;
   apiKeyEl.value = cfg.apiKey;
@@ -174,7 +192,7 @@ saveBtn.addEventListener('click', async () => {
   };
 
   // 导出依赖 AI 优化，API 配置必须完整
-  if (!config.apiUrl || !config.apiKey || !config.model) {
+  if (!isAiConfigured(config)) {
     saveStatus.textContent = '需填写完整的 API 地址、密钥与模型名称';
     saveStatus.style.color = 'var(--md-error)';
     return;
@@ -189,7 +207,7 @@ saveBtn.addEventListener('click', async () => {
 // ── AI 状态提示 ──
 async function refreshAiHint(): Promise<void> {
   const cfg = await loadAiConfig();
-  if (!(cfg.apiUrl && cfg.apiKey && cfg.model)) {
+  if (!isAiConfigured(cfg)) {
     aiHint.textContent = '请先点击 ⚙ 完成 AI API 配置';
     return;
   }

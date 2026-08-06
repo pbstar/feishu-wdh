@@ -4,7 +4,7 @@
 
 import type { AiConfig, AiPurpose } from './types';
 
-export const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
+const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 
 // ── offscreen 消息协议（独立于 popup/background/content 的 RuntimeMessage）──
 

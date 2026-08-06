@@ -1,4 +1,4 @@
-import { onRuntimeMessage, reportProgress } from '../shared/messaging';
+import { reportProgress } from '../shared/messaging';
 import type { DocumentModel, ExtractResultMsg, RuntimeMessage } from '../shared/types';
 import { findScrollContainer, scrollAndCollect } from './scroll';
 import { BlockCollector, getDocRoot, getDocTitle } from './extract';
@@ -30,7 +30,7 @@ async function runExtract(): Promise<ExtractResultMsg> {
   return { type: 'EXTRACT_RESULT', doc, images };
 }
 
-onRuntimeMessage((msg: RuntimeMessage, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse) => {
   if (msg.type === 'EXTRACT') {
     runExtract()
       .then((result) => sendResponse(result))

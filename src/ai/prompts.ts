@@ -1,6 +1,6 @@
 import type { AiPurpose } from "../shared/types";
 
-const PROMPTS: Record<AiPurpose, string> = {
+export const PROMPTS: Record<AiPurpose, string> = {
   // 文档优化：保留原文信息与段落顺序，逐段精简、去冗余；排版优化为次要任务
   optimize: `你是资深需求文档专家，精通 Markdown 排版。你的任务是把输入的需求文档优化成一份结构清晰、表达凝练的 Markdown 文档。
 
@@ -24,8 +24,3 @@ const PROMPTS: Record<AiPurpose, string> = {
 3. 不展开需求细节，不写验收标准与实施步骤，只输出任务本身。
 4. 仅输出任务清单，不添加前言、总结或与文档无关的内容。`,
 };
-
-/** 按用途返回系统提示词 */
-export function getPrompt(purpose: AiPurpose): string {
-  return PROMPTS[purpose];
-}

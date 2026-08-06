@@ -1,6 +1,5 @@
 import type { AiConfig, AiPurpose } from '../shared/types';
-import { getPrompt } from './prompts';
-import { ensureOffscreen, sendToOffscreen, type AiResponse } from '../shared/offscreen';
+import { PROMPTS } from './prompts';
 
 /** AI 请求超时时间（毫秒）：长文档处理较慢，给足 5 分钟。
  *  请求在 offscreen 中执行，SW 等待期间由心跳消息与挂起通道保活，不受其生命周期上限约束 */
@@ -28,7 +27,7 @@ export async function runAiRequest(
   purpose: AiPurpose,
 ): Promise<string> {
   const messages: ChatMessage[] = [
-    { role: 'system', content: getPrompt(purpose) },
+    { role: 'system', content: PROMPTS[purpose] },
     { role: 'user', content: markdown },
   ];
 
@@ -76,28 +75,4 @@ export async function runAiRequest(
   } finally {
     clearTimeout(timer);
   }
-}
-
-/**
- * 后台入口：把 AI 请求交给 offscreen 文档执行。
- * await sendMessage 的挂起消息通道会把 SW 保活，请求超时后 offscreen 返回明确错误，
- * 避免 SW 被回收导致 UI 永久卡住。
- */
-export async function requestAiContent(
-  markdown: string,
-  config: AiConfig,
-  purpose: AiPurpose,
-): Promise<string> {
-  await ensureOffscreen();
-  const resp = await sendToOffscreen<AiResponse>({
-    target: 'offscreen',
-    type: 'AI_REQUEST',
-    markdown,
-    config,
-    purpose,
-  });
-  if (!resp?.ok || !resp.content) {
-    throw new Error(resp?.error || 'AI 处理未返回结果');
-  }
-  return resp.content;
 }

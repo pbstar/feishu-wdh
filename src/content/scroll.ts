@@ -1,4 +1,4 @@
-import { SCROLL_CONTAINER_SELECTORS, queryFirst } from './selectors';
+import { DOC_ROOT_SELECTORS, SCROLL_CONTAINER_SELECTORS, queryFirst } from './selectors';
 
 const STEP_DELAY = 220; // 每步滚动后等待渲染的毫秒数
 const STABLE_ROUNDS = 3; // 连续多少轮高度/滚动位置不变即认为到底
@@ -12,40 +12,17 @@ function sleep(ms: number): Promise<void> {
 export function findScrollContainer(): HTMLElement | null {
   const el = queryFirst<HTMLElement>(SCROLL_CONTAINER_SELECTORS);
   if (el && el.scrollHeight > el.clientHeight) return el;
-  // 回退：遍历找一个可滚动的容器
-  const candidates = document.querySelectorAll<HTMLElement>('div');
-  for (const c of candidates) {
-    if (c.scrollHeight > c.clientHeight + 200 && c.clientHeight > 300) {
-      const style = getComputedStyle(c);
-      if (/(auto|scroll)/.test(style.overflowY)) return c;
+  // 回退：从正文根向上遍历祖先找可滚动容器，比全页扫描 div 更符合语义，且只走十几层
+  const root = queryFirst<HTMLElement>(DOC_ROOT_SELECTORS);
+  let node = root?.parentElement ?? null;
+  while (node) {
+    if (node.scrollHeight > node.clientHeight + 200 && node.clientHeight > 300) {
+      const style = getComputedStyle(node);
+      if (/(auto|scroll)/.test(style.overflowY)) return node;
     }
+    node = node.parentElement;
   }
   return null;
-}
-
-interface ScrollTarget {
-  getScrollTop: () => number;
-  setScrollTop: (v: number) => void;
-  getScrollHeight: () => number;
-  getClientHeight: () => number;
-}
-
-function makeTarget(container: HTMLElement | null): ScrollTarget {
-  if (container) {
-    return {
-      getScrollTop: () => container.scrollTop,
-      setScrollTop: (v) => (container.scrollTop = v),
-      getScrollHeight: () => container.scrollHeight,
-      getClientHeight: () => container.clientHeight,
-    };
-  }
-  const doc = document.scrollingElement || document.documentElement;
-  return {
-    getScrollTop: () => doc.scrollTop,
-    setScrollTop: (v) => (doc.scrollTop = v),
-    getScrollHeight: () => doc.scrollHeight,
-    getClientHeight: () => doc.clientHeight,
-  };
 }
 
 /**
@@ -58,27 +35,27 @@ export async function scrollAndCollect(
   onSlice: () => void | Promise<void>,
   onProgress?: (ratio: number) => void,
 ): Promise<void> {
-  const target = makeTarget(container);
-  const originalTop = target.getScrollTop();
+  const el = container ?? document.scrollingElement ?? document.documentElement;
+  const originalTop = el.scrollTop;
 
   // 回到顶部，从头采集
-  target.setScrollTop(0);
+  el.scrollTop = 0;
   await sleep(STEP_DELAY);
   await onSlice();
 
   let stableCount = 0;
-  let lastHeight = target.getScrollHeight();
+  let lastHeight = el.scrollHeight;
   let lastTop = -1;
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    const clientH = target.getClientHeight();
+    const clientH = el.clientHeight;
     // 步长略小于一屏，制造重叠，避免高速滚动漏掉临界 block
-    target.setScrollTop(target.getScrollTop() + clientH * 0.75);
+    el.scrollTop = el.scrollTop + clientH * 0.75;
     await sleep(STEP_DELAY);
     await onSlice();
 
-    const curTop = target.getScrollTop();
-    const curHeight = target.getScrollHeight();
+    const curTop = el.scrollTop;
+    const curHeight = el.scrollHeight;
     const atBottom = curTop + clientH >= curHeight - 2;
 
     if (onProgress && curHeight > 0) {
@@ -96,5 +73,5 @@ export async function scrollAndCollect(
   }
 
   // 恢复用户原始位置
-  target.setScrollTop(originalTop);
+  el.scrollTop = originalTop;
 }

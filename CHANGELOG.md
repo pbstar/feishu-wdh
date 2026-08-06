@@ -4,6 +4,18 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.2] - 2026-08-06
+
+- 修复：`loadAiConfig` 对 `extras` 改为深合并，注册表新增支线任务时旧存储读出的开关默认关闭，而非 `undefined`
+- 优化：`findScrollContainer` 回退路径改为从文档正文根向上遍历祖先找可滚动容器，替代全页扫描 `div`
+- 优化：`extFromMime` 的 MIME-扩展名映射表提为模块级常量，避免每张图片抓取时重建
+- 重构：`src/content/extract.ts`（542 行）按职责拆分为 `src/content/extract/` 目录（`inline`/`blocks`/`walk`/`collector`/`index`），块树遍历抽取为唯一的通用 `walkBlocks`，块标签集合统一派生自单一数据源
+- 重构：`src/shared/types.ts` 按领域拆分为 `src/shared/types/`（`doc`/`config`/`messages`），新增 `isAiConfigured`/`ExportOutcome` 收敛此前散落三处的重复判断与重复字段定义
+- 重构：`src/ai/request.ts` 按运行上下文拆分为 `request.ts`（offscreen 侧执行）与 `client.ts`（SW 侧转发）
+- 重构：`src/background/index.ts` 的 `runExport` 拆分为 `extractDoc`/`runAiTasks`/`deliver` 三段编排，保持 `saveExportResult` 先于 `trackProgress('done')` 的既有不变量
+- 重构：`src/popup/popup.ts` 支线任务开关改为持有 `Map` 而非按 id 重复查询 DOM，渲染改用 `createElement`/`textContent` 替代 `innerHTML` 插值；抽取 `showError`/`setRunning`（原 `finish`，命名与语义反转已修正）消除重复渲染逻辑
+- 清理：移除若干死代码与死配置——`extract.ts` 中恒真的表格条件分支、`base.css` 遗留的 `select` 样式、`vite.config.ts` 无入口可用的 `server` 配置、未被外部引用的 `onRuntimeMessage`/`getPrompt` 包装
+
 ## [0.3.1] - 2026-08-06
 
 - 优化：清理「AI 文档优化为必开功能」的表述——开关早已移除，AI 优化就是导出流程本身，无需再强调「必开」；README、设置页文案、代码注释一并统一

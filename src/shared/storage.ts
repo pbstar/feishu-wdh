@@ -7,7 +7,11 @@ const EXPORT_RESULT_KEY = 'lastExportResult';
 export async function loadAiConfig(): Promise<AiConfig> {
   const result = await chrome.storage.local.get(AI_CONFIG_KEY);
   const stored = result[AI_CONFIG_KEY] as Partial<AiConfig> | undefined;
-  return { ...DEFAULT_AI_CONFIG, ...stored };
+  return {
+    ...DEFAULT_AI_CONFIG,
+    ...stored,
+    extras: { ...DEFAULT_AI_CONFIG.extras, ...stored?.extras },
+  };
 }
 
 export async function saveAiConfig(config: AiConfig): Promise<void> {
