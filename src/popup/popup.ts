@@ -173,9 +173,9 @@ saveBtn.addEventListener('click', async () => {
     model: modelEl.value.trim(),
   };
 
-  // AI 文档优化为必开功能，API 配置必须完整
+  // 导出依赖 AI 优化，API 配置必须完整
   if (!config.apiUrl || !config.apiKey || !config.model) {
-    saveStatus.textContent = 'AI 优化为必开功能，需填写完整的 API 地址、密钥与模型名称';
+    saveStatus.textContent = '需填写完整的 API 地址、密钥与模型名称';
     saveStatus.style.color = 'var(--md-error)';
     return;
   }
@@ -190,10 +190,10 @@ saveBtn.addEventListener('click', async () => {
 async function refreshAiHint(): Promise<void> {
   const cfg = await loadAiConfig();
   if (!(cfg.apiUrl && cfg.apiKey && cfg.model)) {
-    aiHint.textContent = 'AI 文档优化已开启，请先点击 ⚙ 完成 API 配置';
+    aiHint.textContent = '请先点击 ⚙ 完成 AI API 配置';
     return;
   }
-  const features = ['AI 文档优化已开启'];
+  const features = ['AI 配置已完成'];
   for (const goal of EXTRA_GOALS) {
     if (cfg.extras[goal.key]) features.push(`${goal.hint}已开启`);
   }

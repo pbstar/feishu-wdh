@@ -20,7 +20,7 @@ interface ChatResponse {
  * 调用兼容 OpenAI Chat Completions 的大模型，对 Markdown 按用途处理（文档优化 / 任务总结）。
  * 由 offscreen 文档执行：SW 生命周期受限，裸 fetch 挂起时会被回收，导致 UI 永久卡在
  * "正在调用 AI 处理内容"；offscreen 是真实页面，定时器可靠触发、无硬上限。
- * 失败时抛出错误：优化为必开主输出，调用方应让导出整体失败；任务清单为可选，由调用方决定是否跳过。
+ * 失败时抛出错误：优化为主输出，调用方应让导出整体失败；任务清单为可选，由调用方决定是否跳过。
  */
 export async function runAiRequest(
   markdown: string,

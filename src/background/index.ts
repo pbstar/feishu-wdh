@@ -62,7 +62,7 @@ async function runExport(): Promise<void> {
 
     const imagesFailed = images.filter((i) => i.failed).length;
 
-    // AI 为必开功能：配置不完整时直接报错，引导去设置页
+    // 导出依赖 AI 优化：配置不完整时直接报错，引导去设置页
     const aiConfig = await loadAiConfig();
     if (!(aiConfig.apiUrl && aiConfig.apiKey && aiConfig.model)) {
       throw new Error('请先在设置中完成 AI 配置（API 地址、密钥与模型名称）');
@@ -71,7 +71,7 @@ async function runExport(): Promise<void> {
     // 原文仅作为 AI 输入，不再写入 ZIP
     const markdown = toMarkdown(doc);
 
-    // 并行发起 AI 请求：文档优化为必开主输出，与所有启用的支线任务相互独立同时执行，
+    // 并行发起 AI 请求：文档优化为主输出，与所有启用的支线任务相互独立同时执行，
     // 以缩短总耗时。优化失败即整体失败；支线任务失败仅跳过对应附加文件并提示。
     // AI 请求在 offscreen 执行，其周期性心跳消息与挂起通道会保活 SW，避免长等待被回收。
     const goals = enabledExtraGoals(aiConfig.extras);
@@ -90,7 +90,7 @@ async function runExport(): Promise<void> {
       ),
     );
 
-    // 先等必开主输出：优化失败立即中断导出，不必再等支线任务
+    // 先等主输出：优化失败立即中断导出，不必再等支线任务
     const optimized = await optimizePromise;
     const extra = (await goalsPromise).filter(
       (item): item is { filename: string; content: string } => item !== null,

@@ -111,7 +111,7 @@ export interface FetchedImage {
 /** 可并行执行的支线 AI 任务（导出额外附加文件）标识；新增支线任务在此追加 key */
 export type ExtraKey = 'tasks';
 
-/** AI 用途：文档优化为必开主输出（optimize），支线任务复用各自 key 作为用途 */
+/** AI 用途：文档优化为主输出（optimize），支线任务复用各自 key 作为用途 */
 export type AiPurpose = 'optimize' | ExtraKey;
 
 export interface AiConfig {
