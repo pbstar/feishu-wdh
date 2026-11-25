@@ -57,16 +57,6 @@ async function extractDoc(): Promise<{ doc: DocumentModel; images: FetchedImage[
   return { doc, images };
 }
 
-/** 打包 ZIP 并触发下载，返回实际下载文件名 */
-async function deliver(
-  doc: DocumentModel,
-  markdown: string,
-  images: FetchedImage[],
-): Promise<string> {
-  const zipBase64 = await packageZip(doc.title, markdown, images);
-  return downloadZip(zipBase64, doc.title);
-}
-
 async function runExport(): Promise<void> {
   if (exporting) {
     reportProgress({ stage: 'error', message: '已有导出进行中，请稍候再试' });
@@ -83,8 +73,10 @@ async function runExport(): Promise<void> {
     const imagesFailed = images.filter((i) => i.failed).length;
 
     // 打包并下载
+    const markdown = toMarkdown(doc);
     trackProgress({ stage: 'packaging', message: '正在打包 ZIP…' });
-    const filename = await deliver(doc, toMarkdown(doc), images);
+    const zipBase64 = await packageZip(doc.title, markdown, images);
+    const filename = await downloadZip(zipBase64, doc.title);
 
     // 先持久化结果再进入同步收尾：storage 写入放在 trackProgress 之前，
     // 保证 done → exporting=false 之间无 await，避免状态查询观测到不一致组合

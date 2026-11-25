@@ -15,12 +15,12 @@ export interface ExportProgress {
 }
 
 /** popup → background：请求导出当前 tab */
-export interface StartExportMsg {
+interface StartExportMsg {
   type: 'START_EXPORT';
 }
 
 /** background → content：执行提取（滚动+抽取+抓图） */
-export interface ExtractMsg {
+interface ExtractMsg {
   type: 'EXTRACT';
 }
 
@@ -52,7 +52,7 @@ export interface ExportDoneMsg extends ExportOutcome {
 }
 
 /** popup → background：查询当前导出状态（popup 重新打开时恢复进度/上次结果） */
-export interface GetExportStateMsg {
+interface GetExportStateMsg {
   type: 'GET_EXPORT_STATE';
 }
 

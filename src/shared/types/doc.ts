@@ -13,7 +13,7 @@ export interface InlineText {
 export type InlineNode = InlineText | InlineImage;
 
 /** 行内图片 */
-export interface InlineImage {
+interface InlineImage {
   type: 'image';
   /** 图片来源 URL（原始，用于抓取） */
   src: string;
@@ -32,13 +32,13 @@ export type BlockNode =
   | ImageBlock
   | DividerBlock;
 
-export interface HeadingBlock {
+interface HeadingBlock {
   type: 'heading';
   level: 1 | 2 | 3 | 4 | 5 | 6;
   children: InlineNode[];
 }
 
-export interface ParagraphBlock {
+interface ParagraphBlock {
   type: 'paragraph';
   children: InlineNode[];
 }
@@ -59,7 +59,7 @@ export interface ListItem {
   key?: string;
 }
 
-export interface QuoteBlock {
+interface QuoteBlock {
   type: 'quote';
   /** 引用容器内可包含多个块 */
   children: BlockNode[];
@@ -84,7 +84,7 @@ export interface ImageBlock {
   localPath?: string;
 }
 
-export interface DividerBlock {
+interface DividerBlock {
   type: 'divider';
 }
 

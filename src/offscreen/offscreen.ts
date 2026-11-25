@@ -1,11 +1,7 @@
 // offscreen document：拥有 DOM 能力，负责把 base64 转成 Blob URL（SW 无此 API）。
 // chrome.downloads 在 offscreen 文档中不可用，下载动作由 service worker 完成。
 
-import type {
-  CreateBlobUrlRequest,
-  CreateBlobUrlResponse,
-  OffscreenRequest,
-} from '../shared/offscreen';
+import type { CreateBlobUrlRequest, CreateBlobUrlResponse } from '../shared/offscreen';
 
 function base64ToBlob(base64: string, mime: string): Blob {
   const binary = atob(base64);
@@ -14,7 +10,7 @@ function base64ToBlob(base64: string, mime: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
-chrome.runtime.onMessage.addListener((msg: OffscreenRequest, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg: CreateBlobUrlRequest, _sender, sendResponse) => {
   if (msg.target !== 'offscreen') return;
 
   if (msg.type === 'CREATE_BLOB_URL') {

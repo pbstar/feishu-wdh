@@ -4,14 +4,9 @@
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 
-// ── offscreen 消息协议（独立于 popup/background/content 的 RuntimeMessage）──
-
-export interface OffscreenBase {
-  target: 'offscreen';
-}
-
 /** SW → offscreen：把 ZIP base64 转成 Blob URL（SW 无 URL.createObjectURL） */
-export interface CreateBlobUrlRequest extends OffscreenBase {
+export interface CreateBlobUrlRequest {
+  target: 'offscreen';
   type: 'CREATE_BLOB_URL';
   base64: string;
 }
@@ -21,8 +16,6 @@ export interface CreateBlobUrlResponse {
   url?: string;
   error?: string;
 }
-
-export type OffscreenRequest = CreateBlobUrlRequest;
 
 // 正在创建 offscreen document 的进行中任务；并发调用共享同一次创建，避免竞态重复 createDocument
 let offscreenEnsuring: Promise<void> | null = null;
@@ -54,6 +47,6 @@ async function createOffscreenDocument(): Promise<void> {
 }
 
 /** 向 offscreen 发消息并等待响应；无监听方响应时 resolve 为 undefined */
-export async function sendToOffscreen<Res>(msg: OffscreenRequest): Promise<Res> {
+export async function sendToOffscreen<Res>(msg: CreateBlobUrlRequest): Promise<Res> {
   return (await chrome.runtime.sendMessage(msg)) as Res;
 }
