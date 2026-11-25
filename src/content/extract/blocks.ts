@@ -59,13 +59,7 @@ function listToInline(list: ListBlock, depth: number): InlineNode[] {
   const out: InlineNode[] = [];
   list.items.forEach((item, i) => {
     if (out.length) out.push({ text: '\n' });
-    const marker = list.ordered
-      ? `${i + 1}. `
-      : item.checked !== undefined
-        ? item.checked
-          ? '☑ '
-          : '☐ '
-        : '• ';
+    const marker = list.ordered ? `${i + 1}. ` : '• ';
     out.push({ text: '  '.repeat(depth) + marker }, ...item.children);
     if (item.sublist) {
       out.push({ text: '\n' }, ...listToInline(item.sublist, depth + 1));
@@ -82,63 +76,20 @@ export function getCodeElement(el: HTMLElement): HTMLElement {
 
 /** 代码正文由 Slate 按行渲染成 .ace-line；没有行元素时用渲染文本兜底 */
 export function extractCode(el: HTMLElement): string {
-  const rendered = stripInvisible(el.innerText || el.textContent || '').replace(/\n+$/, '');
   const lines = el.querySelectorAll<HTMLElement>('.ace-line');
-  if (!lines.length) return rendered;
-  const joined = Array.from(lines)
+  if (!lines.length) return stripInvisible(el.innerText).replace(/\n+$/, '');
+  return Array.from(lines)
     .map((line) => stripInvisible(line.textContent ?? ''))
     .join('\n')
     .replace(/\n+$/, '');
-  return joined || rendered;
 }
 
-// 语言展示名 → 围栏标识（飞书头部显示的是展示名，如 JSON、纯文本）
-const LANG_ALIASES: Record<string, string> = {
-  json: 'json',
-  javascript: 'javascript',
-  typescript: 'typescript',
-  python: 'python',
-  java: 'java',
-  go: 'go',
-  golang: 'go',
-  sql: 'sql',
-  shell: 'shell',
-  bash: 'bash',
-  yaml: 'yaml',
-  xml: 'xml',
-  html: 'html',
-  css: 'css',
-  markdown: 'markdown',
-  'plain text': 'text',
-  纯文本: 'text',
-};
-
-function normalizeLang(raw: string): string | undefined {
-  const key = raw.trim().toLowerCase();
-  return LANG_ALIASES[key] ?? (key || undefined);
-}
-
-/** 代码语言：块属性 → 块内属性/类名 → 头部语言标签 */
+/** 代码语言：头部语言按钮的文本（如 JSON、纯文本），纯文本不标围栏语言 */
 function detectLanguage(el: HTMLElement): string | undefined {
-  const own = el.getAttribute('data-language') ?? el.getAttribute('data-lang');
-  if (own) return normalizeLang(own);
-
-  const marked = el.querySelector<HTMLElement>('[data-language], [data-lang], [class*="language-"]');
-  if (marked) {
-    const fromAttr = marked.getAttribute('data-language') ?? marked.getAttribute('data-lang');
-    if (fromAttr) return normalizeLang(fromAttr);
-    const fromClass = (marked.getAttribute('class') ?? '').match(/language-([\w+#.-]+)/i);
-    if (fromClass) return normalizeLang(fromClass[1]);
-  }
-
-  // 语言按钮：头部工具条上的语言下拉按钮，文本即当前语言（如 JSON、纯文本）；
-  // 头部还有说明文字与「复制」按钮，不能读整个头部
-  const button = el.querySelector<HTMLElement>('.code-block-header-btn');
-  const label = stripInvisible(button?.textContent ?? '').trim();
+  const label = stripInvisible(el.querySelector<HTMLElement>('.code-block-header-btn')?.textContent ?? '').trim();
   if (!label) return undefined;
   const key = label.toLowerCase();
-  // 未收录的英文语言名（如 C++、PHP）直接作为围栏标识
-  return LANG_ALIASES[key] ?? (/^[\w+#.-]+$/.test(label) ? key : undefined);
+  return key === '纯文本' || key === 'plain text' ? 'text' : key;
 }
 
 // ── 列表块 ──
@@ -153,14 +104,10 @@ function extractDocxList(el: HTMLElement, ordered: boolean): ListBlock {
 /** 解析一个列表项块（含其嵌套子项） */
 function docxListItem(el: HTMLElement): ListItem {
   const content = el.querySelector<HTMLElement>('.list-content');
-  const checkbox = el.querySelector<HTMLInputElement>(
-    ':scope > .list-wrapper > .list input[type="checkbox"]',
-  );
   const children = docxChildLists(el);
   return {
     key: getBlockId(el) ?? undefined,
     children: content ? extractInline(content) : extractInline(el),
-    checked: checkbox ? checkbox.checked : undefined,
     sublist: children.length
       ? { ...children[0], items: children.flatMap((list) => list.items) }
       : undefined,
@@ -194,7 +141,7 @@ export function elementToBlock(el: HTMLElement): BlockNode[] {
 
   if (LIST_BLOCK_TYPES.has(type)) return [extractDocxList(el, type === 'ordered')];
 
-  if (type === 'code' || el.querySelector(CODE_SCROLLER_SELECTOR)) {
+  if (type === 'code') {
     const codeEl = getCodeElement(el);
     return [{ type: 'code', language: detectLanguage(el), code: extractCode(codeEl) }];
   }

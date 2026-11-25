@@ -1,40 +1,25 @@
 import type { BlockNode, FetchedImage } from '../../shared/types';
-import { stripInvisible } from '../../shared/text';
 import { BLOCK_ID_ATTR, CODE_SCROLLER_SELECTOR } from '../selectors';
 import { extFromMime, fetchImageToBase64 } from '../fetchImage';
 import { elementToBlock, extractCode, getBlockId, getCodeElement } from './blocks';
 import { collectImageRefsInBlocks } from './walk';
 import { mergeBlocks, mergeCodeLines } from './merge';
 
-function textContentTrim(el: Element): string {
-  return stripInvisible(el.textContent ?? '').trim();
-}
-
-/** FNV-1a 32 位字符串哈希，用于块去重指纹（同长度+同哈希视为同内容） */
-function hashString(str: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(36);
-}
-
 /**
  * 采集器：跨屏累积 block。飞书虚拟滚动会回收离开视口的 DOM，
- * 故每滚一屏调用一次 collectSlice，按 block 唯一键去重、按文档坐标排序。
+ * 故每滚一屏调用一次 collectSlice，按块 ID 去重、按文档坐标排序。
  * 图片在采集当屏就地抓取为 base64：飞书正文图多为 blob: URL，一旦所在
  * block 被回收，blob 即被 revoke，滚完再抓必然失败。
  */
 export class BlockCollector {
-  // key → { block, order }。order 为该 block 在文档中的绝对垂直坐标，用于排序。
+  // 块 ID → { blocks, order }。order 为该 block 在文档中的绝对垂直坐标，用于排序。
   private map = new Map<string, { blocks: BlockNode[]; order: number }>();
   private seq = 0; // 无坐标时的兜底自增序号
   private scrollEl: HTMLElement | null;
   // 图片抓取结果：src → 结果（含 localPath / base64 / mime，或失败标记）
   private images = new Map<string, FetchedImage>();
   private imgSeq = 0;
-  // 已完成内部滚动展开的代码块 key：长代码块的开销较大，每块只展开一次
+  // 已完成内部滚动展开的代码块 ID：长代码块开销较大，每块只展开一次
   private expandedCode = new Set<string>();
 
   /** @param scrollContainer 滚动容器；null 表示窗口滚动 */
@@ -49,10 +34,10 @@ export class BlockCollector {
       let blocks = elementToBlock(el);
       if (!blocks.length) continue;
 
-      const key = this.keyFor(el, blocks);
+      const key = getBlockId(el)!;
       const existing = this.map.get(key);
-      // 已采集过：合并多次采集结果。表格/块骨架首次扫到可能残缺，长代码块还会被
-      // 虚拟化按窗口分段渲染、单次只含一部分行，故需拼接而非保留内容最多的一份。
+      // 已采集过：合并多次采集结果。表格单元格、列表项会被虚拟化占位，长代码块
+      // 按窗口分段渲染，单次采集都不完整，需按结构合并而非保留内容最多的一份
       if (existing) {
         const merged = mergeBlocks(existing.blocks, blocks);
         if (!merged) continue; // 本次采集没有带来新内容
@@ -94,7 +79,7 @@ export class BlockCollector {
     }
   }
 
-  /** 找到 root 下的顶层 block 元素列表：带块 ID 的即为块，否则下钻或按段落容器处理 */
+  /** 找到 root 下的顶层 block 元素：带块 ID 的即为块，包裹层继续下钻 */
   private findTopBlocks(root: HTMLElement): HTMLElement[] {
     const result: HTMLElement[] = [];
     const walk = (node: HTMLElement) => {
@@ -102,24 +87,12 @@ export class BlockCollector {
         if (child.hasAttribute(BLOCK_ID_ATTR)) {
           result.push(child);
         } else if (child.querySelector(`[${BLOCK_ID_ATTR}]`)) {
-          walk(child); // 内部还有块，继续下钻
-        } else if (textContentTrim(child) || child.querySelector('img')) {
-          result.push(child);
+          walk(child);
         }
       }
     };
     walk(root);
     return result;
-  }
-
-  /** block 唯一键：优先 data-block-id，否则用完整内容哈希 */
-  private keyFor(el: HTMLElement, blocks: BlockNode[]): string {
-    const id = getBlockId(el);
-    if (id) return `id:${id}`;
-    // 无 id：对整块序列化内容做哈希（含长度），同内容视为同块。
-    // 用完整内容而非截断前缀，避免长块前缀相同被误判重复。
-    const json = JSON.stringify(blocks);
-    return `fp:${json.length}:${hashString(json)}`;
   }
 
   /** block 在文档中的绝对垂直位置，用于跨屏排序 */
@@ -138,10 +111,9 @@ export class BlockCollector {
 
   /** 合并所有已采集 block，按文档坐标排序输出 */
   finalize(): BlockNode[] {
-    const entries = [...this.map.values()].sort((a, b) => a.order - b.order);
-    const out: BlockNode[] = [];
-    for (const e of entries) out.push(...e.blocks);
-    return dedupeAdjacent(out);
+    return [...this.map.values()]
+      .sort((a, b) => a.order - b.order)
+      .flatMap((entry) => entry.blocks);
   }
 
   /** 已就地抓取的图片列表（含成功与失败） */
@@ -156,43 +128,16 @@ export class BlockCollector {
   }
 }
 
-/** 去除相邻完全重复的块 */
-function dedupeAdjacent(blocks: BlockNode[]): BlockNode[] {
-  const out: BlockNode[] = [];
-  let lastKey = '';
-  for (const b of blocks) {
-    const key = JSON.stringify(b);
-    if (key === lastKey) continue;
-    out.push(b);
-    lastKey = key;
-  }
-  return out;
-}
-
-/** 代码块内部的滚动容器：优先已知选择器，回退到内部可滚动元素中溢出最多的一个 */
-function findCodeScroller(root: HTMLElement): HTMLElement | null {
-  const known = root.querySelector<HTMLElement>(CODE_SCROLLER_SELECTOR);
-  if (known && known.scrollHeight > known.clientHeight + 4) return known;
-  let best: HTMLElement | null = null;
-  for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
-    const overflow = el.scrollHeight - el.clientHeight;
-    if (overflow <= 4) continue;
-    if (!/(auto|scroll)/.test(getComputedStyle(el).overflowY)) continue;
-    if (!best || overflow > best.scrollHeight - best.clientHeight) best = el;
-  }
-  return best;
-}
-
 /**
  * 滚遍代码块内部滚动条，按重叠行拼出完整代码（虚拟化只渲染可视行）。
  * 结束后恢复原来的滚动位置，不改变用户看到的状态。
  */
 async function captureFullCode(blockEl: HTMLElement, codeEl: HTMLElement): Promise<string> {
-  const scroller = findCodeScroller(blockEl);
-  // 代码正文在内部滚动区里，从滚动区取文本可避开代码块外框（语言标签、复制按钮等）
+  const scroller = blockEl.querySelector<HTMLElement>(CODE_SCROLLER_SELECTOR);
+  // 代码正文在内部滚动区里，从滚动区取文本可避开语言标签、复制按钮等外框文本
   const contentEl = scroller ?? codeEl;
   let code = extractCode(contentEl);
-  if (!scroller) return code;
+  if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 4) return code;
 
   const restore = scroller.scrollTop;
   // 步长略小于可视高度，制造重叠，拼接时能对齐

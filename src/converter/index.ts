@@ -7,12 +7,7 @@ function renderList(list: ListBlock, depth: number): string {
   const lines: string[] = [];
   list.items.forEach((item, i) => {
     const pad = INDENT.repeat(depth);
-    let marker: string;
-    if (item.checked !== undefined) {
-      marker = `- [${item.checked ? 'x' : ' '}]`;
-    } else {
-      marker = list.ordered ? `${i + 1}.` : '-';
-    }
+    const marker = list.ordered ? `${i + 1}.` : '-';
     const content = renderInline(item.children).trim().replace(/\n/g, '<br>');
     lines.push(`${pad}${marker} ${content}`);
     if (item.sublist) {

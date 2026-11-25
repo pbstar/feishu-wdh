@@ -1,9 +1,6 @@
 import type { InlineNode, InlineText } from '../../shared/types';
 import { stripInvisible } from '../../shared/text';
 
-// 语义已明确的行内标签，无需再查计算样式即可判定；其余元素才回退到 getComputedStyle。
-const SEMANTIC_INLINE_TAGS = new Set(['b', 'strong', 'i', 'em', 'del', 's', 'strike']);
-
 // ── 行内内容提取 ──
 export function extractInline(node: Node, ctx: Partial<InlineText> = {}): InlineNode[] {
   const out: InlineNode[] = [];
@@ -48,19 +45,12 @@ export function extractInline(node: Node, ctx: Partial<InlineText> = {}): Inline
       pushText('\n', ctx);
     }
 
-    // 样式标签：语义标签直接判定；否则查一次计算样式，识别飞书用 CSS 携带的样式。
+    // 样式由渲染结果判定：飞书用 span + 内联样式表达加粗/斜体/删除线
     const nextCtx: Partial<InlineText> = { ...ctx };
-    if (tag === 'b' || tag === 'strong') nextCtx.bold = true;
-    if (tag === 'i' || tag === 'em') nextCtx.italic = true;
-    if (tag === 'del' || tag === 's' || tag === 'strike') nextCtx.strike = true;
-
-    const semantic = SEMANTIC_INLINE_TAGS.has(tag);
-    if (!semantic) {
-      const style = getComputedStyle(el);
-      if (Number(style.fontWeight) >= 600) nextCtx.bold = true;
-      if (style.fontStyle === 'italic') nextCtx.italic = true;
-      if (style.textDecorationLine?.includes('line-through')) nextCtx.strike = true;
-    }
+    const style = getComputedStyle(el);
+    if (Number(style.fontWeight) >= 600) nextCtx.bold = true;
+    if (style.fontStyle === 'italic') nextCtx.italic = true;
+    if (style.textDecorationLine?.includes('line-through')) nextCtx.strike = true;
 
     out.push(...extractInline(el, nextCtx));
   });

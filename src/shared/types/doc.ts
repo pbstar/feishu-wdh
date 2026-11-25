@@ -53,8 +53,6 @@ export interface ListItem {
   children: InlineNode[];
   /** 嵌套子列表 */
   sublist?: ListBlock;
-  /** 任务列表勾选状态；非任务项为 undefined */
-  checked?: boolean;
   /** 块 ID 等稳定标识：跨屏采集同一项时用于合并，不参与渲染 */
   key?: string;
 }
