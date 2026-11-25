@@ -4,6 +4,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-11-25
+
+- 移除：AI 前端研发任务总结功能，支线任务注册表机制一并拆除——`src/ai/extras.ts`、`ExtraKey`/`AiPurpose` 类型、tasks 提示词、并行支线编排、ZIP 附加文件与设置页开关全部删除
+- 变更：`AiConfig` 移除 `extras` 字段（破坏性变更，不兼容旧配置结构；旧存储中的残留开关不再读取，保存设置时自动覆盖），导出流程简化为单次 AI 优化请求
+- 优化：README 功能说明、隐私说明与 `package.json` 描述同步移除任务清单相关表述
+
 ## [0.3.2] - 2026-08-06
 
 - 修复：`loadAiConfig` 对 `extras` 改为深合并，注册表新增支线任务时旧存储读出的开关默认关闭，而非 `undefined`

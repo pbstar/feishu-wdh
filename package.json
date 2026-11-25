@@ -1,6 +1,6 @@
 {
   "name": "feishu-wdh",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "一键将飞书文档经 AI 优化后导出为 Markdown，图片本地化并打包 ZIP",
   "type": "module",
   "private": true,
