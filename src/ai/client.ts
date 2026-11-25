@@ -1,4 +1,4 @@
-import type { AiConfig, AiPurpose } from '../shared/types';
+import type { AiConfig } from '../shared/types';
 import { ensureOffscreen, sendToOffscreen, type AiResponse } from '../shared/offscreen';
 
 /**
@@ -9,7 +9,6 @@ import { ensureOffscreen, sendToOffscreen, type AiResponse } from '../shared/off
 export async function requestAiContent(
   markdown: string,
   config: AiConfig,
-  purpose: AiPurpose,
 ): Promise<string> {
   await ensureOffscreen();
   const resp = await sendToOffscreen<AiResponse>({
@@ -17,7 +16,6 @@ export async function requestAiContent(
     type: 'AI_REQUEST',
     markdown,
     config,
-    purpose,
   });
   if (!resp?.ok || !resp.content) {
     throw new Error(resp?.error || 'AI 处理未返回结果');

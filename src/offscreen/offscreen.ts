@@ -79,7 +79,7 @@ async function handleAiRequest(
   // 避免 SW 被 MV3 生命周期回收导致导出静默中断。并发请求共享同一条心跳。
   startAiHeartbeat();
   try {
-    const content = await runAiRequest(msg.markdown, msg.config, msg.purpose);
+    const content = await runAiRequest(msg.markdown, msg.config);
     sendResponse({ ok: true, content });
   } catch (err) {
     sendResponse({ ok: false, error: (err as Error).message });

@@ -1,7 +1,6 @@
-import type { AiConfig, ExportOutcome, ExportStage, ExportStateResp, ExtraKey, RuntimeMessage } from '../shared/types';
+import type { AiConfig, ExportOutcome, ExportStage, ExportStateResp, RuntimeMessage } from '../shared/types';
 import { isAiConfigured } from '../shared/types';
 import { loadAiConfig, saveAiConfig } from '../shared/storage';
-import { EXTRA_GOALS } from '../ai/extras';
 
 // ── 主视图元素 ──
 const viewMain = document.getElementById('view-main') as HTMLElement;
@@ -17,7 +16,6 @@ const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
 const aiHint = document.getElementById('ai-hint') as HTMLSpanElement;
 
 // ── 设置视图元素 ──
-const extrasContainer = document.getElementById('ai-extras') as HTMLElement;
 const apiUrlEl = document.getElementById('api-url') as HTMLInputElement;
 const apiKeyEl = document.getElementById('api-key') as HTMLInputElement;
 const modelEl = document.getElementById('model') as HTMLInputElement;
@@ -130,54 +128,8 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
 });
 
 // ── AI 配置 ──
-// 支线任务开关行的 input 元素，key → element；渲染时填充，供收集/回填状态直接读取
-const extraInputs = new Map<ExtraKey, HTMLInputElement>();
-
-/** 按注册表渲染支线任务开关行；后续新增支线任务无需改动此处 */
-function renderExtraSwitches(): void {
-  extrasContainer.innerHTML = '';
-  extraInputs.clear();
-  for (const goal of EXTRA_GOALS) {
-    const row = document.createElement('div');
-    row.className = 'switch-row';
-
-    const info = document.createElement('div');
-    const label = document.createElement('div');
-    label.className = 'switch-label';
-    label.textContent = goal.label;
-    const desc = document.createElement('div');
-    desc.className = 'switch-desc';
-    desc.textContent = goal.desc;
-    info.append(label, desc);
-
-    const switchLabel = document.createElement('label');
-    switchLabel.className = 'switch';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    const slider = document.createElement('span');
-    slider.className = 'slider';
-    switchLabel.append(input, slider);
-
-    row.append(info, switchLabel);
-    extrasContainer.appendChild(row);
-    extraInputs.set(goal.key, input);
-  }
-}
-
-/** 收集各开关状态为 extras 对象 */
-function collectExtras(): Record<ExtraKey, boolean> {
-  const extras = {} as Record<ExtraKey, boolean>;
-  for (const [key, el] of extraInputs) {
-    extras[key] = el.checked;
-  }
-  return extras;
-}
-
 async function loadSettingsForm(): Promise<void> {
   const cfg = await loadAiConfig();
-  for (const [key, el] of extraInputs) {
-    el.checked = cfg.extras[key];
-  }
   apiUrlEl.value = cfg.apiUrl;
   apiKeyEl.value = cfg.apiKey;
   modelEl.value = cfg.model;
@@ -185,7 +137,6 @@ async function loadSettingsForm(): Promise<void> {
 
 saveBtn.addEventListener('click', async () => {
   const config: AiConfig = {
-    extras: collectExtras(),
     apiUrl: apiUrlEl.value.trim(),
     apiKey: apiKeyEl.value.trim(),
     model: modelEl.value.trim(),
@@ -207,19 +158,10 @@ saveBtn.addEventListener('click', async () => {
 // ── AI 状态提示 ──
 async function refreshAiHint(): Promise<void> {
   const cfg = await loadAiConfig();
-  if (!isAiConfigured(cfg)) {
-    aiHint.textContent = '请先点击 ⚙ 完成 AI API 配置';
-    return;
-  }
-  const features = ['AI 配置已完成'];
-  for (const goal of EXTRA_GOALS) {
-    if (cfg.extras[goal.key]) features.push(`${goal.hint}已开启`);
-  }
-  aiHint.textContent = `✓ ${features.join('、')}`;
+  aiHint.textContent = isAiConfigured(cfg) ? '✓ AI 配置已完成' : '请先点击 ⚙ 完成 AI API 配置';
 }
 
 // 初始化
-renderExtraSwitches();
 void loadSettingsForm();
 void refreshAiHint();
 void restoreState();

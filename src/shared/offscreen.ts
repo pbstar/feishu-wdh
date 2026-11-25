@@ -2,7 +2,7 @@
 // MV3 里 service worker 生命周期受限（空闲回收 + 硬上限），长任务（AI 请求、Blob URL
 // 生成）必须放到 offscreen 文档中执行；SW 侧 await sendMessage 的挂起通道会把 SW 保活。
 
-import type { AiConfig, AiPurpose } from './types';
+import type { AiConfig } from './types';
 
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 
@@ -29,7 +29,6 @@ export interface AiRequest extends OffscreenBase {
   type: 'AI_REQUEST';
   markdown: string;
   config: AiConfig;
-  purpose: AiPurpose;
 }
 
 export interface AiResponse {
