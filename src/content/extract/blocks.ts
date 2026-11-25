@@ -92,9 +92,52 @@ export function extractCode(el: HTMLElement): string {
   return joined || rendered;
 }
 
+// 语言展示名 → 围栏标识（飞书头部显示的是展示名，如 JSON、纯文本）
+const LANG_ALIASES: Record<string, string> = {
+  json: 'json',
+  javascript: 'javascript',
+  typescript: 'typescript',
+  python: 'python',
+  java: 'java',
+  go: 'go',
+  golang: 'go',
+  sql: 'sql',
+  shell: 'shell',
+  bash: 'bash',
+  yaml: 'yaml',
+  xml: 'xml',
+  html: 'html',
+  css: 'css',
+  markdown: 'markdown',
+  'plain text': 'text',
+  纯文本: 'text',
+};
+
+function normalizeLang(raw: string): string | undefined {
+  const key = raw.trim().toLowerCase();
+  return LANG_ALIASES[key] ?? (key || undefined);
+}
+
+/** 代码语言：块属性 → 块内属性/类名 → 头部语言标签 */
 function detectLanguage(el: HTMLElement): string | undefined {
-  const m = (el.getAttribute('class') ?? '').match(/language-([\w+-]+)/i);
-  return m?.[1] ?? el.getAttribute('data-language') ?? el.getAttribute('data-lang') ?? undefined;
+  const own = el.getAttribute('data-language') ?? el.getAttribute('data-lang');
+  if (own) return normalizeLang(own);
+
+  const marked = el.querySelector<HTMLElement>('[data-language], [data-lang], [class*="language-"]');
+  if (marked) {
+    const fromAttr = marked.getAttribute('data-language') ?? marked.getAttribute('data-lang');
+    if (fromAttr) return normalizeLang(fromAttr);
+    const fromClass = (marked.getAttribute('class') ?? '').match(/language-([\w+#.-]+)/i);
+    if (fromClass) return normalizeLang(fromClass[1]);
+  }
+
+  // 头部语言标签：飞书把当前语言渲染在头部（同一区域还有「复制」按钮，需剔除）
+  const header = el.querySelector<HTMLElement>('.code-block-header');
+  const label = stripInvisible(header?.textContent ?? '').replace(/复制/g, '').trim();
+  if (!label) return undefined;
+  const key = label.toLowerCase();
+  // 未收录的英文语言名（如 C++、PHP）直接作为围栏标识
+  return LANG_ALIASES[key] ?? (/^[\w+#.-]+$/.test(label) ? key : undefined);
 }
 
 // ── 列表块 ──
@@ -152,7 +195,7 @@ export function elementToBlock(el: HTMLElement): BlockNode[] {
 
   if (type === 'code' || el.querySelector(CODE_SCROLLER_SELECTOR)) {
     const codeEl = getCodeElement(el);
-    return [{ type: 'code', language: detectLanguage(el) || detectLanguage(codeEl), code: extractCode(codeEl) }];
+    return [{ type: 'code', language: detectLanguage(el), code: extractCode(codeEl) }];
   }
 
   if (type === 'table') return [extractTable(el)];
