@@ -22,18 +22,13 @@ export function renderInline(nodes: InlineNode[]): string {
       let s = t.text;
       if (!s) return '';
 
-      if (t.code) {
-        // 代码内容不转义，用反引号包裹；内容含反引号时用双反引号
-        const fence = s.includes('`') ? '`` ' : '`';
-        const close = s.includes('`') ? ' ``' : '`';
-        return `${fence}${s}${close}`;
-      }
-
       s = escapeText(s);
       // 保留首尾空格：加粗/斜体标记必须紧贴非空白字符，故把空格移到标记外
       const lead = s.match(/^\s*/)?.[0] ?? '';
       const trail = s.match(/\s*$/)?.[0] ?? '';
       let core = s.slice(lead.length, s.length - trail.length);
+      // 纯空白（如换行符）不包裹样式，否则首尾匹配会重复同一段空白
+      if (!core) return s;
 
       if (t.strike) core = `~~${core}~~`;
       if (t.bold && t.italic) core = `***${core}***`;

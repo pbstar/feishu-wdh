@@ -9,7 +9,7 @@ import type { CreateBlobUrlRequest, CreateBlobUrlResponse } from '../shared/offs
  */
 export async function downloadZip(zipBase64: string, title: string): Promise<string> {
   const filename = `${sanitizeFilename(title)}.zip`;
-  // AI 阶段可能已创建过 offscreen，此处幂等复用
+  // offscreen 仅用于把 ZIP 转成 Blob URL，此处幂等创建
   await ensureOffscreen();
 
   const req: CreateBlobUrlRequest = {

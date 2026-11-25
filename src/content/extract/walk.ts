@@ -15,7 +15,7 @@ function walkList(list: ListBlock, v: BlockVisitor): void {
 }
 
 /** 递归遍历一组 block，按类型分发到访问者对应回调 */
-export function walkBlocks(blocks: BlockNode[], v: BlockVisitor): void {
+function walkBlocks(blocks: BlockNode[], v: BlockVisitor): void {
   for (const b of blocks) {
     switch (b.type) {
       case 'heading':
@@ -62,17 +62,20 @@ export function collectImageRefsInBlocks(
   return refs;
 }
 
+/** 行内内容量：文本字符数 + 图片计数 */
+export function inlineWeight(nodes: InlineNode[]): number {
+  let weight = 0;
+  for (const n of nodes) weight += 'type' in n ? 1 : n.text.length;
+  return weight;
+}
+
 /** 块内容量：文本总字符数 + 图片计数。用于判断同一 block 的新版本是否更完整。 */
 export function contentWeight(blocks: BlockNode[]): number {
   let weight = 0;
-  const inlineWeight = (nodes: InlineNode[]) => {
-    for (const n of nodes) {
-      if ('type' in n) weight += 1; // 图片
-      else weight += n.text.length;
-    }
-  };
   walkBlocks(blocks, {
-    onInline: inlineWeight,
+    onInline: (nodes) => {
+      weight += inlineWeight(nodes);
+    },
     onImage: () => {
       weight += 1;
     },

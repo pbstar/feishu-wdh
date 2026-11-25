@@ -7,14 +7,13 @@ export interface InlineText {
   bold?: boolean;
   italic?: boolean;
   strike?: boolean;
-  code?: boolean;
   link?: string;
 }
 
 export type InlineNode = InlineText | InlineImage;
 
 /** 行内图片 */
-export interface InlineImage {
+interface InlineImage {
   type: 'image';
   /** 图片来源 URL（原始，用于抓取） */
   src: string;
@@ -33,13 +32,13 @@ export type BlockNode =
   | ImageBlock
   | DividerBlock;
 
-export interface HeadingBlock {
+interface HeadingBlock {
   type: 'heading';
   level: 1 | 2 | 3 | 4 | 5 | 6;
   children: InlineNode[];
 }
 
-export interface ParagraphBlock {
+interface ParagraphBlock {
   type: 'paragraph';
   children: InlineNode[];
 }
@@ -54,13 +53,13 @@ export interface ListItem {
   children: InlineNode[];
   /** 嵌套子列表 */
   sublist?: ListBlock;
-  /** 任务列表勾选状态；非任务项为 undefined */
-  checked?: boolean;
+  /** 块 ID 等稳定标识：跨屏采集同一项时用于合并，不参与渲染 */
+  key?: string;
 }
 
-export interface QuoteBlock {
+interface QuoteBlock {
   type: 'quote';
-  /** 引用可包含多个块 */
+  /** 引用容器内可包含多个块 */
   children: BlockNode[];
 }
 
@@ -83,7 +82,7 @@ export interface ImageBlock {
   localPath?: string;
 }
 
-export interface DividerBlock {
+interface DividerBlock {
   type: 'divider';
 }
 

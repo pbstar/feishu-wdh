@@ -1,27 +1,26 @@
 import type { BlockNode, FetchedImage } from '../../shared/types';
+import { BLOCK_ID_ATTR, CODE_SCROLLER_SELECTOR } from '../selectors';
 import { extFromMime, fetchImageToBase64 } from '../fetchImage';
-import { hashString } from './inline';
-import { BLOCK_CHILD_SELECTOR, BLOCK_ID_ATTRS, elementToBlock, getBlockId, isBlockElement } from './blocks';
-import { collectImageRefsInBlocks, contentWeight } from './walk';
-
-function textContentTrim(el: Element): string {
-  return (el.textContent ?? '').replace(/​/g, '').trim();
-}
+import { elementToBlock, extractCode, getBlockId, getCodeElement } from './blocks';
+import { collectImageRefsInBlocks } from './walk';
+import { mergeBlocks, mergeCodeLines } from './merge';
 
 /**
  * 采集器：跨屏累积 block。飞书虚拟滚动会回收离开视口的 DOM，
- * 故每滚一屏调用一次 collectSlice，按 block 唯一键去重、按文档坐标排序。
+ * 故每滚一屏调用一次 collectSlice，按块 ID 去重、按文档坐标排序。
  * 图片在采集当屏就地抓取为 base64：飞书正文图多为 blob: URL，一旦所在
  * block 被回收，blob 即被 revoke，滚完再抓必然失败。
  */
 export class BlockCollector {
-  // key → { block, order }。order 为该 block 在文档中的绝对垂直坐标，用于排序。
+  // 块 ID → { blocks, order }。order 为该 block 在文档中的绝对垂直坐标，用于排序。
   private map = new Map<string, { blocks: BlockNode[]; order: number }>();
   private seq = 0; // 无坐标时的兜底自增序号
   private scrollEl: HTMLElement | null;
   // 图片抓取结果：src → 结果（含 localPath / base64 / mime，或失败标记）
   private images = new Map<string, FetchedImage>();
   private imgSeq = 0;
+  // 已完成内部滚动展开的代码块 ID：长代码块开销较大，每块只展开一次
+  private expandedCode = new Set<string>();
 
   /** @param scrollContainer 滚动容器；null 表示窗口滚动 */
   constructor(scrollContainer: HTMLElement | null) {
@@ -32,15 +31,25 @@ export class BlockCollector {
   async collectSlice(root: HTMLElement): Promise<void> {
     const tops = this.findTopBlocks(root);
     for (const el of tops) {
-      const blocks = elementToBlock(el);
+      let blocks = elementToBlock(el);
       if (!blocks.length) continue;
 
-      const key = this.keyFor(el, blocks);
+      const key = getBlockId(el)!;
       const existing = this.map.get(key);
-      // 已采集过：仅当新版本内容更完整时才替换。
-      // 飞书虚拟滚动会先渲染表格/块骨架、后填文字，首次扫到可能残缺，
-      // 需允许更完整的版本覆盖，否则内容丢失（表现为空表格/空段落）。
-      if (existing && contentWeight(blocks) <= contentWeight(existing.blocks)) continue;
+      // 已采集过：合并多次采集结果。表格单元格、列表项会被虚拟化占位，长代码块
+      // 按窗口分段渲染，单次采集都不完整，需按结构合并而非保留内容最多的一份
+      if (existing) {
+        const merged = mergeBlocks(existing.blocks, blocks);
+        if (!merged) continue; // 本次采集没有带来新内容
+        blocks = merged;
+      }
+
+      // 长代码块带内部滚动、只渲染可视行：首次采集时滚遍它，拼出完整代码
+      if (blocks.length === 1 && blocks[0].type === 'code' && !this.expandedCode.has(key)) {
+        const code = await captureFullCode(el, getCodeElement(el));
+        blocks = [{ ...blocks[0], code }];
+        this.expandedCode.add(key);
+      }
 
       // 就地抓取该 block 内的图片（此刻图片仍存活于 DOM，blob 未被 revoke）
       await this.captureImagesIn(blocks);
@@ -70,34 +79,20 @@ export class BlockCollector {
     }
   }
 
-  /** 找到 root 下的顶层 block 元素列表（跨嵌套容器下钻到真正的 block 层） */
+  /** 找到 root 下的顶层 block 元素：带块 ID 的即为块，包裹层继续下钻 */
   private findTopBlocks(root: HTMLElement): HTMLElement[] {
     const result: HTMLElement[] = [];
     const walk = (node: HTMLElement) => {
       for (const child of Array.from(node.children) as HTMLElement[]) {
-        if (isBlockElement(child)) {
+        if (child.hasAttribute(BLOCK_ID_ATTR)) {
           result.push(child);
-        } else if (child.querySelector(BLOCK_CHILD_SELECTOR) ||
-                   BLOCK_ID_ATTRS.some((a) => child.querySelector(`:scope [${a}]`))) {
-          walk(child); // 内部还有 block，继续下钻
-        } else {
-          const text = textContentTrim(child);
-          if (text || child.querySelector('img')) result.push(child);
+        } else if (child.querySelector(`[${BLOCK_ID_ATTR}]`)) {
+          walk(child);
         }
       }
     };
     walk(root);
     return result;
-  }
-
-  /** block 唯一键：优先 data-block-id，否则用完整内容哈希 */
-  private keyFor(el: HTMLElement, blocks: BlockNode[]): string {
-    const id = getBlockId(el);
-    if (id) return `id:${id}`;
-    // 无 id：对整块序列化内容做哈希（含长度），同内容视为同块。
-    // 用完整内容而非截断前缀，避免长块前缀相同被误判重复。
-    const json = JSON.stringify(blocks);
-    return `fp:${json.length}:${hashString(json)}`;
   }
 
   /** block 在文档中的绝对垂直位置，用于跨屏排序 */
@@ -116,10 +111,9 @@ export class BlockCollector {
 
   /** 合并所有已采集 block，按文档坐标排序输出 */
   finalize(): BlockNode[] {
-    const entries = [...this.map.values()].sort((a, b) => a.order - b.order);
-    const out: BlockNode[] = [];
-    for (const e of entries) out.push(...e.blocks);
-    return dedupeAdjacent(out);
+    return [...this.map.values()]
+      .sort((a, b) => a.order - b.order)
+      .flatMap((entry) => entry.blocks);
   }
 
   /** 已就地抓取的图片列表（含成功与失败） */
@@ -134,15 +128,33 @@ export class BlockCollector {
   }
 }
 
-/** 去除相邻完全重复的块 */
-function dedupeAdjacent(blocks: BlockNode[]): BlockNode[] {
-  const out: BlockNode[] = [];
-  let lastKey = '';
-  for (const b of blocks) {
-    const key = JSON.stringify(b);
-    if (key === lastKey) continue;
-    out.push(b);
-    lastKey = key;
+/**
+ * 滚遍代码块内部滚动条，按重叠行拼出完整代码（虚拟化只渲染可视行）。
+ * 结束后恢复原来的滚动位置，不改变用户看到的状态。
+ */
+async function captureFullCode(blockEl: HTMLElement, codeEl: HTMLElement): Promise<string> {
+  const scroller = blockEl.querySelector<HTMLElement>(CODE_SCROLLER_SELECTOR);
+  // 代码正文在内部滚动区里，从滚动区取文本可避开语言标签、复制按钮等外框文本
+  const contentEl = scroller ?? codeEl;
+  let code = extractCode(contentEl);
+  if (!scroller || scroller.scrollHeight <= scroller.clientHeight + 4) return code;
+
+  const restore = scroller.scrollTop;
+  // 步长略小于可视高度，制造重叠，拼接时能对齐
+  const step = Math.max(40, Math.floor(scroller.clientHeight * 0.8));
+  try {
+    for (let top = 0; top <= scroller.scrollHeight; top += step) {
+      scroller.scrollTop = top;
+      await sleep(80); // 等虚拟化重新渲染
+      code = mergeCodeLines(code, extractCode(contentEl));
+      if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1) break;
+    }
+  } finally {
+    scroller.scrollTop = restore;
   }
-  return out;
+  return code;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -53,24 +53,3 @@ button:disabled {
   background: var(--md-primary-dark);
   box-shadow: var(--md-shadow);
 }
-
-input[type='text'],
-input[type='password'],
-select {
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 14px;
-  font-family: inherit;
-  color: var(--md-text);
-  background: var(--md-surface);
-  border: 1px solid var(--md-border);
-  border-radius: var(--md-radius);
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-input[type='text']:focus,
-input[type='password']:focus,
-select:focus {
-  border-color: var(--md-primary);
-}
