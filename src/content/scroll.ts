@@ -1,4 +1,4 @@
-import { DOC_ROOT_SELECTORS, SCROLL_CONTAINER_SELECTORS, queryFirst } from './selectors';
+import { DOC_ROOT_SELECTOR } from './selectors';
 
 const STEP_DELAY = 220; // 每步滚动后等待渲染的毫秒数
 const STABLE_ROUNDS = 3; // 连续多少轮高度/滚动位置不变即认为到底
@@ -8,17 +8,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** 找到承载虚拟滚动的滚动容器；找不到则返回 null（回退到窗口滚动） */
+/** 从正文根向上找承载虚拟滚动的容器；找不到返回 null（回退窗口滚动） */
 export function findScrollContainer(): HTMLElement | null {
-  const el = queryFirst<HTMLElement>(SCROLL_CONTAINER_SELECTORS);
-  if (el && el.scrollHeight > el.clientHeight) return el;
-  // 回退：从正文根向上遍历祖先找可滚动容器，比全页扫描 div 更符合语义，且只走十几层
-  const root = queryFirst<HTMLElement>(DOC_ROOT_SELECTORS);
+  const root = document.querySelector<HTMLElement>(DOC_ROOT_SELECTOR);
   let node = root?.parentElement ?? null;
   while (node) {
     if (node.scrollHeight > node.clientHeight + 200 && node.clientHeight > 300) {
-      const style = getComputedStyle(node);
-      if (/(auto|scroll)/.test(style.overflowY)) return node;
+      if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) return node;
     }
     node = node.parentElement;
   }

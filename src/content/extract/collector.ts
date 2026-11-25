@@ -1,12 +1,23 @@
 import type { BlockNode, FetchedImage } from '../../shared/types';
 import { stripInvisible } from '../../shared/text';
+import { BLOCK_ID_ATTR, CODE_SCROLLER_SELECTOR } from '../selectors';
 import { extFromMime, fetchImageToBase64 } from '../fetchImage';
-import { hashString } from './inline';
-import { BLOCK_CHILD_SELECTOR, BLOCK_ID_ATTRS, elementToBlock, getBlockId, isBlockElement } from './blocks';
-import { collectImageRefsInBlocks, contentWeight } from './walk';
+import { elementToBlock, extractCode, getBlockId, getCodeElement } from './blocks';
+import { collectImageRefsInBlocks } from './walk';
+import { mergeBlocks, mergeCodeLines } from './merge';
 
 function textContentTrim(el: Element): string {
   return stripInvisible(el.textContent ?? '').trim();
+}
+
+/** FNV-1a 32 位字符串哈希，用于块去重指纹（同长度+同哈希视为同内容） */
+function hashString(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
 }
 
 /**
@@ -23,6 +34,8 @@ export class BlockCollector {
   // 图片抓取结果：src → 结果（含 localPath / base64 / mime，或失败标记）
   private images = new Map<string, FetchedImage>();
   private imgSeq = 0;
+  // 已完成内部滚动展开的代码块 key：长代码块的开销较大，每块只展开一次
+  private expandedCode = new Set<string>();
 
   /** @param scrollContainer 滚动容器；null 表示窗口滚动 */
   constructor(scrollContainer: HTMLElement | null) {
@@ -44,6 +57,13 @@ export class BlockCollector {
         const merged = mergeBlocks(existing.blocks, blocks);
         if (!merged) continue; // 本次采集没有带来新内容
         blocks = merged;
+      }
+
+      // 长代码块带内部滚动、只渲染可视行：首次采集时滚遍它，拼出完整代码
+      if (blocks.length === 1 && blocks[0].type === 'code' && !this.expandedCode.has(key)) {
+        const code = await captureFullCode(el, getCodeElement(el));
+        blocks = [{ ...blocks[0], code }];
+        this.expandedCode.add(key);
       }
 
       // 就地抓取该 block 内的图片（此刻图片仍存活于 DOM，blob 未被 revoke）
@@ -74,19 +94,17 @@ export class BlockCollector {
     }
   }
 
-  /** 找到 root 下的顶层 block 元素列表（跨嵌套容器下钻到真正的 block 层） */
+  /** 找到 root 下的顶层 block 元素列表：带块 ID 的即为块，否则下钻或按段落容器处理 */
   private findTopBlocks(root: HTMLElement): HTMLElement[] {
     const result: HTMLElement[] = [];
     const walk = (node: HTMLElement) => {
       for (const child of Array.from(node.children) as HTMLElement[]) {
-        if (isBlockElement(child)) {
+        if (child.hasAttribute(BLOCK_ID_ATTR)) {
           result.push(child);
-        } else if (child.querySelector(BLOCK_CHILD_SELECTOR) ||
-                   BLOCK_ID_ATTRS.some((a) => child.querySelector(`:scope [${a}]`))) {
-          walk(child); // 内部还有 block，继续下钻
-        } else {
-          const text = textContentTrim(child);
-          if (text || child.querySelector('img')) result.push(child);
+        } else if (child.querySelector(`[${BLOCK_ID_ATTR}]`)) {
+          walk(child); // 内部还有块，继续下钻
+        } else if (textContentTrim(child) || child.querySelector('img')) {
+          result.push(child);
         }
       }
     };
@@ -151,49 +169,47 @@ function dedupeAdjacent(blocks: BlockNode[]): BlockNode[] {
   return out;
 }
 
-/**
- * 合并同一 block 的多次采集结果。返回 null 表示本次采集没有带来新内容。
- * 长代码块在虚拟滚动下按窗口分段渲染，单次只有一部分行，需按重叠行拼接；
- * 其余块保留内容更多的一份即可。
- */
-function mergeBlocks(existing: BlockNode[], next: BlockNode[]): BlockNode[] | null {
-  const [a] = existing;
-  const [b] = next;
-  if (existing.length === 1 && next.length === 1 && a.type === 'code' && b.type === 'code') {
-    const code = mergeCodeLines(a.code, b.code);
-    if (code === a.code) return null;
-    return [{ ...a, language: a.language || b.language, code }];
+/** 代码块内部的滚动容器：优先已知选择器，回退到内部可滚动元素中溢出最多的一个 */
+function findCodeScroller(root: HTMLElement): HTMLElement | null {
+  const known = root.querySelector<HTMLElement>(CODE_SCROLLER_SELECTOR);
+  if (known && known.scrollHeight > known.clientHeight + 4) return known;
+  let best: HTMLElement | null = null;
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('*'))) {
+    const overflow = el.scrollHeight - el.clientHeight;
+    if (overflow <= 4) continue;
+    if (!/(auto|scroll)/.test(getComputedStyle(el).overflowY)) continue;
+    if (!best || overflow > best.scrollHeight - best.clientHeight) best = el;
   }
-  return contentWeight(next) > contentWeight(existing) ? next : null;
-}
-
-/** 拼接同一代码块的两次分段采集 */
-function mergeCodeLines(a: string, b: string): string {
-  if (a === b) return a;
-  if (b.includes(a)) return b; // b 覆盖 a 的全部内容
-  if (a.includes(b)) return a;
-  const A = a.split('\n');
-  const B = b.split('\n');
-  // 向下滚动：a 的尾部与 b 的头部重叠；反向则说明先采到了下半段
-  const down = overlapLen(A, B);
-  if (down) return [...A, ...B.slice(down)].join('\n');
-  const up = overlapLen(B, A);
-  if (up) return [...B, ...A.slice(up)].join('\n');
-  // 两段无重叠（虚拟化窗口跳过头尾）：只能保留内容更多的一份
-  return a.length >= b.length ? a : b;
+  return best;
 }
 
 /**
- * x 的尾部与 y 的头部最长重叠行数；找不到可信重叠时返回 0。
- * 要求至少 3 行且包含实质内容行，避免 JSON 里连续 `}`、`],` 等短行造成误拼。
+ * 滚遍代码块内部滚动条，按重叠行拼出完整代码（虚拟化只渲染可视行）。
+ * 结束后恢复原来的滚动位置，不改变用户看到的状态。
  */
-function overlapLen(x: string[], y: string[]): number {
-  const max = Math.min(x.length, y.length);
-  for (let len = max; len >= 3; len--) {
-    const tail = x.slice(x.length - len);
-    if (!tail.every((line, i) => line === y[i])) continue;
-    if (!tail.some((line) => line.trim().length >= 8)) continue;
-    return len;
+async function captureFullCode(blockEl: HTMLElement, codeEl: HTMLElement): Promise<string> {
+  const scroller = findCodeScroller(blockEl);
+  // 代码正文在内部滚动区里，从滚动区取文本可避开代码块外框（语言标签、复制按钮等）
+  const contentEl = scroller ?? codeEl;
+  let code = extractCode(contentEl);
+  if (!scroller) return code;
+
+  const restore = scroller.scrollTop;
+  // 步长略小于可视高度，制造重叠，拼接时能对齐
+  const step = Math.max(40, Math.floor(scroller.clientHeight * 0.8));
+  try {
+    for (let top = 0; top <= scroller.scrollHeight; top += step) {
+      scroller.scrollTop = top;
+      await sleep(80); // 等虚拟化重新渲染
+      code = mergeCodeLines(code, extractCode(contentEl));
+      if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1) break;
+    }
+  } finally {
+    scroller.scrollTop = restore;
   }
-  return 0;
+  return code;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

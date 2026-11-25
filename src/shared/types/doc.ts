@@ -7,7 +7,6 @@ export interface InlineText {
   bold?: boolean;
   italic?: boolean;
   strike?: boolean;
-  code?: boolean;
   link?: string;
 }
 
@@ -27,7 +26,6 @@ export type BlockNode =
   | HeadingBlock
   | ParagraphBlock
   | ListBlock
-  | QuoteBlock
   | CodeBlock
   | TableBlock
   | ImageBlock
@@ -56,12 +54,8 @@ export interface ListItem {
   sublist?: ListBlock;
   /** 任务列表勾选状态；非任务项为 undefined */
   checked?: boolean;
-}
-
-export interface QuoteBlock {
-  type: 'quote';
-  /** 引用可包含多个块 */
-  children: BlockNode[];
+  /** 块 ID 等稳定标识：跨屏采集同一项时用于合并，不参与渲染 */
+  key?: string;
 }
 
 export interface CodeBlock {

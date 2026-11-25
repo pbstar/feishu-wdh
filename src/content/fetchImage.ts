@@ -26,7 +26,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export interface CapturedImage {
+interface CapturedImage {
   base64: string;
   mime: string;
 }

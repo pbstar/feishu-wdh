@@ -29,18 +29,11 @@ function renderBlock(block: BlockNode): string {
       return `${'#'.repeat(block.level)} ${renderInline(block.children).replace(/\n+/g, ' ').trim()}`;
 
     case 'paragraph':
-      return renderInline(block.children).trim();
+      // 段内换行按硬换行输出，避免 GFM 软换行把两行合并成一行
+      return renderInline(block.children).trim().replace(/\n/g, '<br>');
 
     case 'list':
       return renderList(block, 0);
-
-    case 'quote': {
-      const inner = block.children.map(renderBlock).join('\n\n');
-      return inner
-        .split('\n')
-        .map((line) => (line ? `> ${line}` : '>'))
-        .join('\n');
-    }
 
     case 'code': {
       const fence = fenceFor(block.code);
@@ -71,10 +64,27 @@ function renderBlock(block: BlockNode): string {
   }
 }
 
+/**
+ * 相邻同类型列表块合并：飞书把每个列表项存为独立 block，
+ * 不合并的话每项都会各自从 1 开始编号
+ */
+function mergeAdjacentLists(blocks: BlockNode[]): BlockNode[] {
+  const out: BlockNode[] = [];
+  for (const block of blocks) {
+    const last = out[out.length - 1];
+    if (block.type === 'list' && last?.type === 'list' && last.ordered === block.ordered) {
+      last.items.push(...block.items);
+    } else {
+      out.push(block);
+    }
+  }
+  return out;
+}
+
 /** 节点树 → GFM Markdown 全文 */
 export function toMarkdown(doc: DocumentModel): string {
   const parts: string[] = [`# ${doc.title}`];
-  for (const block of doc.blocks) {
+  for (const block of mergeAdjacentLists(doc.blocks)) {
     const rendered = renderBlock(block);
     if (rendered.trim()) parts.push(rendered);
   }

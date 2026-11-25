@@ -1,10 +1,10 @@
-import { DOC_ROOT_SELECTORS, TITLE_SELECTORS, queryFirst } from '../selectors';
+import { DOC_ROOT_SELECTOR, TITLE_SELECTOR } from '../selectors';
 
 export { BlockCollector } from './collector';
 
 // ── 标题提取 ──
 function extractTitle(): string {
-  const el = queryFirst<HTMLElement>(TITLE_SELECTORS);
+  const el = document.querySelector<HTMLElement>(TITLE_SELECTOR);
   const fromDom = el?.textContent?.trim();
   if (fromDom) return fromDom;
   // 回退到页面标题，去掉飞书后缀
@@ -14,7 +14,7 @@ function extractTitle(): string {
 
 /** 定位文档正文根容器 */
 export function getDocRoot(): HTMLElement {
-  return queryFirst<HTMLElement>(DOC_ROOT_SELECTORS) || document.body;
+  return document.querySelector<HTMLElement>(DOC_ROOT_SELECTOR) ?? document.body;
 }
 
 /** 读取文档标题 */
