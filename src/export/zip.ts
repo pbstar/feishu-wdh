@@ -3,7 +3,7 @@ import type { FetchedImage } from '../shared/types';
 import { sanitizeFilename } from '../shared/filename';
 
 /**
- * 打包 AI 优化版 Markdown + 图片为 ZIP，返回 base64（不含 data 前缀）。
+ * 打包 Markdown + 图片为 ZIP，返回 base64（不含 data 前缀）。
  * 主文件为「标题.md」。在 service worker 中运行，故用 base64 输出（无法用 blob URL）。
  */
 export async function packageZip(

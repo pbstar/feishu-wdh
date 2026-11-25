@@ -1,50 +1,22 @@
-import type { AiConfig, ExportOutcome, ExportStage, ExportStateResp, RuntimeMessage } from '../shared/types';
-import { isAiConfigured } from '../shared/types';
-import { loadAiConfig, saveAiConfig } from '../shared/storage';
+import type { ExportOutcome, ExportStage, ExportStateResp, RuntimeMessage } from '../shared/types';
 
-// ── 主视图元素 ──
-const viewMain = document.getElementById('view-main') as HTMLElement;
-const viewSettings = document.getElementById('view-settings') as HTMLElement;
 const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
-const settingsBtn = document.getElementById('settings-btn') as HTMLButtonElement;
-const backBtn = document.getElementById('back-btn') as HTMLButtonElement;
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const statusText = document.getElementById('status-text') as HTMLSpanElement;
 const spinner = document.getElementById('spinner') as HTMLSpanElement;
 const progressTrack = document.getElementById('progress-track') as HTMLDivElement;
 const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
-const aiHint = document.getElementById('ai-hint') as HTMLSpanElement;
-
-// ── 设置视图元素 ──
-const apiUrlEl = document.getElementById('api-url') as HTMLInputElement;
-const apiKeyEl = document.getElementById('api-key') as HTMLInputElement;
-const modelEl = document.getElementById('model') as HTMLInputElement;
-const saveBtn = document.getElementById('save-btn') as HTMLButtonElement;
-const saveStatus = document.getElementById('save-status') as HTMLSpanElement;
 
 const STAGE_PROGRESS: Record<ExportStage, number> = {
   idle: 0,
   scrolling: 30,
   extracting: 55,
-  ai: 75,
   packaging: 90,
   done: 100,
   error: 0,
 };
 
 let running = false;
-
-// ── 视图切换 ──
-function showSettings(show: boolean): void {
-  viewMain.hidden = show;
-  viewSettings.hidden = !show;
-}
-
-settingsBtn.addEventListener('click', () => showSettings(true));
-backBtn.addEventListener('click', () => {
-  showSettings(false);
-  void refreshAiHint();
-});
 
 // ── 导出流程 ──
 function setStatus(text: string, kind: 'normal' | 'error' | 'success' = 'normal'): void {
@@ -127,41 +99,5 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
   }
 });
 
-// ── AI 配置 ──
-async function loadSettingsForm(): Promise<void> {
-  const cfg = await loadAiConfig();
-  apiUrlEl.value = cfg.apiUrl;
-  apiKeyEl.value = cfg.apiKey;
-  modelEl.value = cfg.model;
-}
-
-saveBtn.addEventListener('click', async () => {
-  const config: AiConfig = {
-    apiUrl: apiUrlEl.value.trim(),
-    apiKey: apiKeyEl.value.trim(),
-    model: modelEl.value.trim(),
-  };
-
-  // 导出依赖 AI 优化，API 配置必须完整
-  if (!isAiConfigured(config)) {
-    saveStatus.textContent = '需填写完整的 API 地址、密钥与模型名称';
-    saveStatus.style.color = 'var(--md-error)';
-    return;
-  }
-
-  await saveAiConfig(config);
-  saveStatus.textContent = '✓ 已保存';
-  saveStatus.style.color = 'var(--md-success)';
-  setTimeout(() => (saveStatus.textContent = ''), 2000);
-});
-
-// ── AI 状态提示 ──
-async function refreshAiHint(): Promise<void> {
-  const cfg = await loadAiConfig();
-  aiHint.textContent = isAiConfigured(cfg) ? '✓ AI 配置已完成' : '请先点击 ⚙ 完成 AI API 配置';
-}
-
 // 初始化
-void loadSettingsForm();
-void refreshAiHint();
 void restoreState();

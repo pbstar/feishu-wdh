@@ -1,4 +1,4 @@
-import { loadAiConfig, loadExportResult, saveExportResult } from '../shared/storage';
+import { loadExportResult, saveExportResult } from '../shared/storage';
 import { reportDone, reportProgress } from '../shared/messaging';
 import type {
   DocumentModel,
@@ -8,9 +8,7 @@ import type {
   FetchedImage,
   RuntimeMessage,
 } from '../shared/types';
-import { isAiConfigured } from '../shared/types';
 import { toMarkdown } from '../converter';
-import { requestAiContent } from '../ai/client';
 import { packageZip } from '../export/zip';
 import { downloadZip } from '../export/download';
 
@@ -62,10 +60,10 @@ async function extractDoc(): Promise<{ doc: DocumentModel; images: FetchedImage[
 /** 打包 ZIP 并触发下载，返回实际下载文件名 */
 async function deliver(
   doc: DocumentModel,
-  optimized: string,
+  markdown: string,
   images: FetchedImage[],
 ): Promise<string> {
-  const zipBase64 = await packageZip(doc.title, optimized, images);
+  const zipBase64 = await packageZip(doc.title, markdown, images);
   return downloadZip(zipBase64, doc.title);
 }
 
@@ -84,21 +82,9 @@ async function runExport(): Promise<void> {
     const { doc, images } = await extractDoc();
     const imagesFailed = images.filter((i) => i.failed).length;
 
-    // 导出依赖 AI 优化：配置不完整时直接报错，引导去设置页
-    const aiConfig = await loadAiConfig();
-    if (!isAiConfigured(aiConfig)) {
-      throw new Error('请先在设置中完成 AI 配置（API 地址、密钥与模型名称）');
-    }
-
-    // 原文仅作为 AI 输入，不再写入 ZIP
-    const markdown = toMarkdown(doc);
-    // AI 请求在 offscreen 执行，其周期性心跳消息与挂起通道会保活 SW，避免长等待被回收
-    trackProgress({ stage: 'ai', message: '正在调用 AI 优化文档…' });
-    const optimized = await requestAiContent(markdown, aiConfig);
-
     // 打包并下载
     trackProgress({ stage: 'packaging', message: '正在打包 ZIP…' });
-    const filename = await deliver(doc, optimized, images);
+    const filename = await deliver(doc, toMarkdown(doc), images);
 
     // 先持久化结果再进入同步收尾：storage 写入放在 trackProgress 之前，
     // 保证 done → exporting=false 之间无 await，避免状态查询观测到不一致组合
@@ -122,7 +108,7 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse
     void runExport();
     return;
   }
-  // content/offscreen 广播的实时进度（滚动、抽取、AI 心跳）→ 同步进内存态，
+  // content 广播的实时进度（滚动、抽取）→ 同步进内存态，
   // 保证 popup 重开时拉到的 progress 是最新文案。SW 收不到自己的广播，不会回环覆盖。
   if (msg.type === 'PROGRESS' && exporting) {
     currentProgress = msg.progress;

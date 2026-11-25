@@ -5,7 +5,6 @@ export type ExportStage =
   | 'idle'
   | 'scrolling'
   | 'extracting'
-  | 'ai'
   | 'packaging'
   | 'done'
   | 'error';
