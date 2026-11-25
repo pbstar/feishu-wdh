@@ -35,6 +35,14 @@ function renderBlock(block: BlockNode): string {
     case 'list':
       return renderList(block, 0);
 
+    case 'quote': {
+      const inner = block.children.map(renderBlock).join('\n\n');
+      return inner
+        .split('\n')
+        .map((line) => (line ? `> ${line}` : '>'))
+        .join('\n');
+    }
+
     case 'code': {
       const fence = fenceFor(block.code);
       return `${fence}${block.language ?? ''}\n${block.code}\n${fence}`;

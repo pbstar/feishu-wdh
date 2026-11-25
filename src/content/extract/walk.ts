@@ -22,6 +22,9 @@ function walkBlocks(blocks: BlockNode[], v: BlockVisitor): void {
       case 'paragraph':
         v.onInline?.(b.children);
         break;
+      case 'quote':
+        walkBlocks(b.children, v);
+        break;
       case 'list':
         walkList(b, v);
         break;

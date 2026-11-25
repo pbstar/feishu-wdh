@@ -14,10 +14,64 @@ function extractTable(el: HTMLElement): TableBlock {
   const rows: InlineNode[][][] = [];
   el.querySelectorAll('tr').forEach((tr) => {
     const cells: InlineNode[][] = [];
-    tr.querySelectorAll('td, th').forEach((cell) => cells.push(extractInline(cell)));
+    tr.querySelectorAll('td, th').forEach((cell) => cells.push(extractCellInline(cell)));
     if (cells.length) rows.push(cells);
   });
   return { type: 'table', rows };
+}
+
+/**
+ * 单元格内容：单元格里可能有多段文本和列表块（列表项是块级子元素），
+ * 逐个块提取并压平成带换行的行内内容，列表项补上项目符号。
+ */
+function extractCellInline(cell: Element): InlineNode[] {
+  const blockEls = cell.querySelectorAll<HTMLElement>(':scope > .render-unit-wrapper > .block');
+  if (!blockEls.length) return extractInline(cell);
+
+  const out: InlineNode[] = [];
+  const pushLine = (nodes: InlineNode[]) => {
+    if (!nodes.length) return;
+    if (out.length) out.push({ text: '\n' });
+    out.push(...nodes);
+  };
+
+  blockEls.forEach((blockEl) => {
+    elementToBlock(blockEl).forEach((block) => {
+      switch (block.type) {
+        case 'heading':
+        case 'paragraph':
+          pushLine(block.children);
+          break;
+        case 'list':
+          pushLine(listToInline(block, 0));
+          break;
+        case 'image':
+          pushLine([{ type: 'image', src: block.src, alt: block.alt }]);
+          break;
+      }
+    });
+  });
+  return out;
+}
+
+/** 列表压平成单元格内联内容：项目符号 + 缩进嵌套 */
+function listToInline(list: ListBlock, depth: number): InlineNode[] {
+  const out: InlineNode[] = [];
+  list.items.forEach((item, i) => {
+    if (out.length) out.push({ text: '\n' });
+    const marker = list.ordered
+      ? `${i + 1}. `
+      : item.checked !== undefined
+        ? item.checked
+          ? '☑ '
+          : '☐ '
+        : '• ';
+    out.push({ text: '  '.repeat(depth) + marker }, ...item.children);
+    if (item.sublist) {
+      out.push({ text: '\n' }, ...listToInline(item.sublist, depth + 1));
+    }
+  });
+  return out;
 }
 
 // ── 代码块 ──
@@ -103,6 +157,9 @@ export function elementToBlock(el: HTMLElement): BlockNode[] {
 
   if (type === 'table') return [extractTable(el)];
   if (type === 'divider') return [{ type: 'divider' }];
+  if (type === 'quote_container') {
+    return [{ type: 'quote', children: extractChildBlocks(el) }];
+  }
 
   // 其他容器块（如高亮块）内部还有子块时下钻，避免被压平成一个段落
   if (el.querySelector(`[${BLOCK_ID_ATTR}]`)) return extractChildBlocks(el);
