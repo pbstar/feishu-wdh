@@ -13,7 +13,7 @@ function renderList(list: ListBlock, depth: number): string {
     } else {
       marker = list.ordered ? `${i + 1}.` : '-';
     }
-    const content = renderInline(item.children).trim();
+    const content = renderInline(item.children).trim().replace(/\n/g, '<br>');
     lines.push(`${pad}${marker} ${content}`);
     if (item.sublist) {
       lines.push(renderList(item.sublist, depth + 1));
@@ -25,7 +25,8 @@ function renderList(list: ListBlock, depth: number): string {
 function renderBlock(block: BlockNode): string {
   switch (block.type) {
     case 'heading':
-      return `${'#'.repeat(block.level)} ${renderInline(block.children).trim()}`;
+      // 标题内不能有换行，硬换行合并为空格
+      return `${'#'.repeat(block.level)} ${renderInline(block.children).replace(/\n+/g, ' ').trim()}`;
 
     case 'paragraph':
       return renderInline(block.children).trim();

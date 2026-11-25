@@ -1,11 +1,12 @@
 import type { BlockNode, FetchedImage } from '../../shared/types';
+import { stripInvisible } from '../../shared/text';
 import { extFromMime, fetchImageToBase64 } from '../fetchImage';
 import { hashString } from './inline';
 import { BLOCK_CHILD_SELECTOR, BLOCK_ID_ATTRS, elementToBlock, getBlockId, isBlockElement } from './blocks';
 import { collectImageRefsInBlocks, contentWeight } from './walk';
 
 function textContentTrim(el: Element): string {
-  return (el.textContent ?? '').replace(/​/g, '').trim();
+  return stripInvisible(el.textContent ?? '').trim();
 }
 
 /**
@@ -32,15 +33,18 @@ export class BlockCollector {
   async collectSlice(root: HTMLElement): Promise<void> {
     const tops = this.findTopBlocks(root);
     for (const el of tops) {
-      const blocks = elementToBlock(el);
+      let blocks = elementToBlock(el);
       if (!blocks.length) continue;
 
       const key = this.keyFor(el, blocks);
       const existing = this.map.get(key);
-      // 已采集过：仅当新版本内容更完整时才替换。
-      // 飞书虚拟滚动会先渲染表格/块骨架、后填文字，首次扫到可能残缺，
-      // 需允许更完整的版本覆盖，否则内容丢失（表现为空表格/空段落）。
-      if (existing && contentWeight(blocks) <= contentWeight(existing.blocks)) continue;
+      // 已采集过：合并多次采集结果。表格/块骨架首次扫到可能残缺，长代码块还会被
+      // 虚拟化按窗口分段渲染、单次只含一部分行，故需拼接而非保留内容最多的一份。
+      if (existing) {
+        const merged = mergeBlocks(existing.blocks, blocks);
+        if (!merged) continue; // 本次采集没有带来新内容
+        blocks = merged;
+      }
 
       // 就地抓取该 block 内的图片（此刻图片仍存活于 DOM，blob 未被 revoke）
       await this.captureImagesIn(blocks);
@@ -145,4 +149,51 @@ function dedupeAdjacent(blocks: BlockNode[]): BlockNode[] {
     lastKey = key;
   }
   return out;
+}
+
+/**
+ * 合并同一 block 的多次采集结果。返回 null 表示本次采集没有带来新内容。
+ * 长代码块在虚拟滚动下按窗口分段渲染，单次只有一部分行，需按重叠行拼接；
+ * 其余块保留内容更多的一份即可。
+ */
+function mergeBlocks(existing: BlockNode[], next: BlockNode[]): BlockNode[] | null {
+  const [a] = existing;
+  const [b] = next;
+  if (existing.length === 1 && next.length === 1 && a.type === 'code' && b.type === 'code') {
+    const code = mergeCodeLines(a.code, b.code);
+    if (code === a.code) return null;
+    return [{ ...a, language: a.language || b.language, code }];
+  }
+  return contentWeight(next) > contentWeight(existing) ? next : null;
+}
+
+/** 拼接同一代码块的两次分段采集 */
+function mergeCodeLines(a: string, b: string): string {
+  if (a === b) return a;
+  if (b.includes(a)) return b; // b 覆盖 a 的全部内容
+  if (a.includes(b)) return a;
+  const A = a.split('\n');
+  const B = b.split('\n');
+  // 向下滚动：a 的尾部与 b 的头部重叠；反向则说明先采到了下半段
+  const down = overlapLen(A, B);
+  if (down) return [...A, ...B.slice(down)].join('\n');
+  const up = overlapLen(B, A);
+  if (up) return [...B, ...A.slice(up)].join('\n');
+  // 两段无重叠（虚拟化窗口跳过头尾）：只能保留内容更多的一份
+  return a.length >= b.length ? a : b;
+}
+
+/**
+ * x 的尾部与 y 的头部最长重叠行数；找不到可信重叠时返回 0。
+ * 要求至少 3 行且包含实质内容行，避免 JSON 里连续 `}`、`],` 等短行造成误拼。
+ */
+function overlapLen(x: string[], y: string[]): number {
+  const max = Math.min(x.length, y.length);
+  for (let len = max; len >= 3; len--) {
+    const tail = x.slice(x.length - len);
+    if (!tail.every((line, i) => line === y[i])) continue;
+    if (!tail.some((line) => line.trim().length >= 8)) continue;
+    return len;
+  }
+  return 0;
 }

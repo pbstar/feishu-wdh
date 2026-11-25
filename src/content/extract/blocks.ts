@@ -1,4 +1,5 @@
 import type { BlockNode, InlineNode, ListBlock, ListItem, TableBlock } from '../../shared/types';
+import { stripInvisible } from '../../shared/text';
 import { extractInline } from './inline';
 
 // ── 列表提取 ──
@@ -46,11 +47,10 @@ export function extractCode(el: HTMLElement): string {
   const lineEls = el.querySelectorAll('.code-line, [data-line], pre > div');
   if (lineEls.length > 1) {
     return Array.from(lineEls)
-      .map((l) => l.textContent ?? '')
-      .join('\n')
-      .replace(/​/g, '');
+      .map((l) => stripInvisible(l.textContent ?? ''))
+      .join('\n');
   }
-  return (el.textContent ?? '').replace(/​/g, '').replace(/\n+$/, '');
+  return stripInvisible(el.textContent ?? '').replace(/\n+$/, '');
 }
 
 function detectLanguage(el: HTMLElement): string | undefined {

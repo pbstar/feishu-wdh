@@ -1,4 +1,5 @@
 import type { InlineNode, InlineText } from '../../shared/types';
+import { stripInvisible } from '../../shared/text';
 
 // 语义已明确的行内标签，无需再查计算样式即可判定；其余元素才回退到 getComputedStyle。
 const SEMANTIC_INLINE_TAGS = new Set(['b', 'strong', 'i', 'em', 'del', 's', 'strike', 'code']);
@@ -14,8 +15,7 @@ export function extractInline(node: Node, ctx: Partial<InlineText> = {}): Inline
 
   node.childNodes.forEach((child) => {
     if (child.nodeType === Node.TEXT_NODE) {
-      // 飞书 DOM 大量插入零宽空格（U+200B）做排版，需先剔除
-      pushText((child.textContent ?? '').replace(/​/g, ''), ctx);
+      pushText(stripInvisible(child.textContent ?? ''), ctx);
       return;
     }
     if (child.nodeType !== Node.ELEMENT_NODE) return;
@@ -34,6 +34,12 @@ export function extractInline(node: Node, ctx: Partial<InlineText> = {}): Inline
     if (tag === 'a') {
       const href = el.getAttribute('href') || undefined;
       out.push(...extractInline(el, { ...ctx, link: href }));
+      return;
+    }
+
+    // 硬换行（Shift+Enter）：保留为换行，表格单元格渲染时再转为 <br>
+    if (tag === 'br') {
+      pushText('\n', ctx);
       return;
     }
 
