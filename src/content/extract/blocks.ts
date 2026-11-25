@@ -131,9 +131,10 @@ function detectLanguage(el: HTMLElement): string | undefined {
     if (fromClass) return normalizeLang(fromClass[1]);
   }
 
-  // 头部语言标签：飞书把当前语言渲染在头部（同一区域还有「复制」按钮，需剔除）
-  const header = el.querySelector<HTMLElement>('.code-block-header');
-  const label = stripInvisible(header?.textContent ?? '').replace(/复制/g, '').trim();
+  // 语言按钮：头部工具条上的语言下拉按钮，文本即当前语言（如 JSON、纯文本）；
+  // 头部还有说明文字与「复制」按钮，不能读整个头部
+  const button = el.querySelector<HTMLElement>('.code-block-header-btn');
+  const label = stripInvisible(button?.textContent ?? '').trim();
   if (!label) return undefined;
   const key = label.toLowerCase();
   // 未收录的英文语言名（如 C++、PHP）直接作为围栏标识
